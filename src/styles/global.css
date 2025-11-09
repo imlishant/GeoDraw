@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg-light: #ffffff;
+  --color-bg-dark: #111827;
+  --color-text-light: #111827;
+  --color-text-dark: #f9fafb;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+    Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+}
+
+canvas {
+  display: block;
+  cursor: crosshair;
+}
+
+/* Tool button active state */
+.tool-active {
+  @apply bg-blue-500 text-white shadow-md;
+}
+
+/* Tool button hover */
+.tool-hover {
+  @apply bg-gray-200 dark:bg-gray-600;
+}
