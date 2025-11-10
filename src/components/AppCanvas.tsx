@@ -4,6 +4,9 @@ import { CanvasRenderer } from '../core/canvas/renderer';
 import type { Vec2, Point, Line, Circle } from '../core/geometry/types';
 import { generateId } from '../core/geometry/utils';
 
+// Snapping radius in pixels for magnetic point snapping
+const SNAP_RADIUS = 15;
+
 export default function AppCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
@@ -99,28 +102,23 @@ export default function AppCanvas() {
     setSnapTarget(snap);
   };
 
+  // Only snap to existing points within SNAP_RADIUS; no grid snap
   const findSnapTarget = (mouse: Vec2, points: Point[]): Vec2 | null => {
-    const snapRadius = 15;
     for (const point of points) {
       const dist = Math.hypot(point.x - mouse.x, point.y - mouse.y);
-      if (dist < snapRadius) {
+      if (dist < SNAP_RADIUS) {
         return { x: point.x, y: point.y };
       }
     }
-    
-    // Grid snap
-    const gridSize = 20;
-    const gridX = Math.round(mouse.x / gridSize) * gridSize;
-    const gridY = Math.round(mouse.y / gridSize) * gridSize;
-    if (Math.hypot(gridX - mouse.x, gridY - mouse.y) < snapRadius) {
-      return { x: gridX, y: gridY };
-    }
-    
     return null;
   };
 
   const handleMouseDown = () => {
-    const pos = snapTarget || mousePos;
+    // Use snapped position if available, otherwise use exact mouse position (rounded)
+    const pos = snapTarget || {
+      x: Math.round(mousePos.x * 100) / 100,
+      y: Math.round(mousePos.y * 100) / 100
+    };
 
     if (selectedTool === 'point') {
       const point: Point = {
@@ -150,7 +148,6 @@ export default function AppCanvas() {
           y: pos.y,
           isFixed: true
         };
-        
         const p1 = elements.find(el => el.id === tempData.p1Id) as Point;
         if (p1) {
           store.addElement(endPoint);
@@ -184,7 +181,6 @@ export default function AppCanvas() {
           y: pos.y,
           isFixed: true
         };
-        
         const center = elements.find(el => el.id === tempData.centerId) as Point;
         if (center) {
           store.addElement(radiusPoint);
