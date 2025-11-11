@@ -20,6 +20,12 @@ export default function AppCanvas() {
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [mousePos, setMousePos] = useState<Vec2>({ x: 0, y: 0 });
   const [snapTarget, setSnapTarget] = useState<Vec2 | null>(null);
+  
+  // Zoom and pan state
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Initialize canvas
   useEffect(() => {
@@ -37,8 +43,37 @@ export default function AppCanvas() {
     window.addEventListener('resize', resize);
     rendererRef.current = new CanvasRenderer(canvas);
 
-    return () => window.removeEventListener('resize', resize);
-  }, []);
+    // Handle mouse wheel zoom
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+      
+      // Calculate zoom delta
+      const delta = -Math.sign(e.deltaY) * 0.1;
+      const newZoom = Math.min(Math.max(zoom + delta, 0.1), 10);
+      
+      // Zoom toward mouse position
+      const scale = newZoom / zoom;
+      const newPanX = mouseX - (mouseX - pan.x) * scale;
+      const newPanY = mouseY - (mouseY - pan.y) * scale;
+      
+      setZoom(newZoom);
+      setPan({ x: newPanX, y: newPanY });
+    };
+    
+    canvas.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      window.removeEventListener('resize', resize);
+      canvas.removeEventListener('wheel', handleWheel);
+    };
+  }, [zoom, pan]);
 
   // Keyboard handler
   useEffect(() => {
@@ -76,6 +111,7 @@ export default function AppCanvas() {
     const renderer = rendererRef.current;
     if (!renderer) return;
 
+    renderer.setTransform(zoom, pan.x, pan.y);
     renderer.clear(canvasSize.width, canvasSize.height);
     renderer.drawGrid(canvasSize.width, canvasSize.height);
     
@@ -84,7 +120,7 @@ export default function AppCanvas() {
     }
     
     renderer.render(elements, null);
-  }, [elements, canvasSize, snapTarget, isDrawing]);
+  }, [elements, canvasSize, snapTarget, isDrawing, zoom, pan]);
 
   // Mouse handlers
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -92,13 +128,28 @@ export default function AppCanvas() {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    setMousePos({ x, y });
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    
+    // Handle panning
+    if (isPanning && lastMousePosRef.current) {
+      const dx = e.clientX - lastMousePosRef.current.x;
+      const dy = e.clientY - lastMousePosRef.current.y;
+      setPan(prev => ({
+        x: prev.x + dx,
+        y: prev.y + dy
+      }));
+    }
+    lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    
+    // Convert screen coordinates to world coordinates
+    const worldX = (screenX - pan.x) / zoom;
+    const worldY = (screenY - pan.y) / zoom;
+    setMousePos({ x: worldX, y: worldY });
 
     // Simple snap detection
     const points = elements.filter(el => el.type === 'point') as Point[];
-    const snap = findSnapTarget({ x, y }, points);
+    const snap = findSnapTarget({ x: worldX, y: worldY }, points);
     setSnapTarget(snap);
   };
 
@@ -113,7 +164,14 @@ export default function AppCanvas() {
     return null;
   };
 
-  const handleMouseDown = () => {
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Right-click to start panning
+    if (e.button === 2) {
+      e.preventDefault();
+      setIsPanning(true);
+      return;
+    }
+    
     // Use snapped position if available, otherwise use exact mouse position (rounded)
     const pos = snapTarget || {
       x: Math.round(mousePos.x * 100) / 100,
@@ -197,12 +255,25 @@ export default function AppCanvas() {
     }
   };
 
+  const handleMouseUp = (e: React.MouseEvent) => {
+    if (e.button === 2) {
+      setIsPanning(false);
+      lastMousePosRef.current = null;
+    }
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent context menu on right-click
+  };
+
 return (
     <canvas
       ref={canvasRef}
       className="w-screen h-screen bg-white dark:bg-gray-900 cursor-crosshair block"
   onMouseMove={handleMouseMove}
   onMouseDown={handleMouseDown}
+      onMouseUp={handleMouseUp}
+      onContextMenu={handleContextMenu}
     />
   );
 }
