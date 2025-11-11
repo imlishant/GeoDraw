@@ -23,6 +23,11 @@ const THEME = {
 export class CanvasRenderer {
   private ctx: CanvasRenderingContext2D;
   private theme = THEME.dark; // Force dark for now
+  private transform = {
+    zoom: 1,
+    panX: 0,
+    panY: 0
+  };
 
   constructor(canvas: HTMLCanvasElement) {
     const context = canvas.getContext('2d');
@@ -37,24 +42,47 @@ export class CanvasRenderer {
       : THEME.light;
   }
 
+  setTransform(zoom: number, panX: number, panY: number) {
+    this.transform = { zoom, panX, panY };
+  }
+
+  applyTransform() {
+    this.ctx.setTransform(
+      this.transform.zoom, 0,
+      0, this.transform.zoom,
+      this.transform.panX,
+      this.transform.panY
+    );
+  }
+
+  resetTransform() {
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+
   clear(width: number, height: number) {
+    this.resetTransform();
     this.ctx.fillStyle = this.theme.canvas;
     this.ctx.fillRect(0, 0, width, height);
   }
 
   drawGrid(width: number, height: number, gridSize: number = 20) {
     this.ctx.save();
+    this.resetTransform();
     this.ctx.strokeStyle = this.theme.grid;
     this.ctx.lineWidth = 1;
 
-    for (let x = 0; x < width; x += gridSize) {
+    const scaledGridSize = gridSize * this.transform.zoom;
+    const startX = (this.transform.panX % scaledGridSize + scaledGridSize) % scaledGridSize;
+    const startY = (this.transform.panY % scaledGridSize + scaledGridSize) % scaledGridSize;
+
+    for (let x = startX; x < width; x += scaledGridSize) {
       this.ctx.beginPath();
       this.ctx.moveTo(x, 0);
       this.ctx.lineTo(x, height);
       this.ctx.stroke();
     }
 
-    for (let y = 0; y < height; y += gridSize) {
+    for (let y = startY; y < height; y += scaledGridSize) {
       this.ctx.beginPath();
       this.ctx.moveTo(0, y);
       this.ctx.lineTo(width, y);
@@ -66,13 +94,18 @@ export class CanvasRenderer {
   drawPoint(point: Point, isHovered: boolean) {
     this.ctx.save();
     this.ctx.fillStyle = isHovered ? this.theme.pointHovered : this.theme.point;
+    
+    // Scale point size inversely with zoom to maintain constant screen size
+    const radius = (isHovered ? 6 : 4) / this.transform.zoom;
+    const borderWidth = 2 / this.transform.zoom;
+    
     this.ctx.beginPath();
-    this.ctx.arc(point.x, point.y, isHovered ? 6 : 4, 0, Math.PI * 2);
+    this.ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
     this.ctx.fill();
     
     // White border for visibility
     this.ctx.strokeStyle = this.theme.canvas;
-    this.ctx.lineWidth = 2;
+    this.ctx.lineWidth = borderWidth;
     this.ctx.stroke();
     this.ctx.restore();
   }
@@ -84,7 +117,8 @@ export class CanvasRenderer {
 
     this.ctx.save();
     this.ctx.strokeStyle = this.theme.elementStroke;
-    this.ctx.lineWidth = 2;
+    // Scale line width inversely with zoom to maintain constant screen width
+    this.ctx.lineWidth = 2 / this.transform.zoom;
     this.ctx.beginPath();
     this.ctx.moveTo(p1.x, p1.y);
     this.ctx.lineTo(p2.x, p2.y);
@@ -101,7 +135,8 @@ export class CanvasRenderer {
 
     this.ctx.save();
     this.ctx.strokeStyle = this.theme.elementStroke;
-    this.ctx.lineWidth = 2;
+    // Scale stroke width inversely with zoom to maintain constant screen width
+    this.ctx.lineWidth = 2 / this.transform.zoom;
     this.ctx.beginPath();
     this.ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
     this.ctx.stroke();
@@ -111,15 +146,18 @@ export class CanvasRenderer {
   drawSnapIndicator(pos: { x: number; y: number }) {
     this.ctx.save();
     this.ctx.strokeStyle = this.theme.pointHovered;
-    this.ctx.lineWidth = 1;
-    this.ctx.setLineDash([5, 5]);
+    // Scale snap indicator inversely with zoom to maintain constant screen size
+    this.ctx.lineWidth = 1 / this.transform.zoom;
+    const dashSize = 5 / this.transform.zoom;
+    this.ctx.setLineDash([dashSize, dashSize]);
     this.ctx.beginPath();
-    this.ctx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
+    this.ctx.arc(pos.x, pos.y, 10 / this.transform.zoom, 0, Math.PI * 2);
     this.ctx.stroke();
     this.ctx.restore();
   }
 
   render(elements: GeoElement[], hoveredId: string | null) {
+    this.applyTransform();
     const points = new Map<string, Point>();
     const lines: Line[] = [];
     const circles: Circle[] = [];
