@@ -4,9 +4,30 @@ import type { Tool } from '../core/geometry/types';
 
 const tools: { id: Tool; label: string; icon: string; customIcon?: React.ReactNode }[] = [
   { id: 'select', label: 'Select (V)', icon: '↖' },
-  { id: 'point', label: 'Point (P)', icon: '●' },
+  { 
+    id: 'point', 
+    label: 'Point (P)', 
+    icon: '●',
+    customIcon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Small hollow circle - just a point */}
+        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="2" fill="none"/>
+      </svg>
+    )
+  },
   { id: 'line', label: 'Line (L)', icon: '╱' },
-  { id: 'circle', label: 'Circle (C)', icon: '○' },
+  { 
+    id: 'circle', 
+    label: 'Circle (C)', 
+    icon: '○',
+    customIcon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Larger circle with center dot */}
+        <circle cx="10" cy="10" r="9" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+        <circle cx="10" cy="10" r="1.5" fill="currentColor"/>
+      </svg>
+    )
+  },
   { 
     id: 'intersect', 
     label: 'Intersect (I)', 

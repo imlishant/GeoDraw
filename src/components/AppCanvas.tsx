@@ -31,6 +31,11 @@ export default function AppCanvas() {
   // Intersection tool state
   const [previewIntersections, setPreviewIntersections] = useState<{ x: number; y: number }[]>([]);
   const [hoveredIntersectionIndex, setHoveredIntersectionIndex] = useState<number | null>(null);
+  
+  // Select/Move tool state
+  const [draggedPointId, setDraggedPointId] = useState<string | null>(null);
+  const [draggedPointPos, setDraggedPointPos] = useState<Vec2 | null>(null);
+  const [dragOriginalPos, setDragOriginalPos] = useState<Vec2 | null>(null);
 
   // Initialize canvas
   useEffect(() => {
@@ -132,7 +137,28 @@ export default function AppCanvas() {
       renderer.drawSnapIndicator(snapTarget);
     }
     
-    renderer.render(elements, null, store.hoveredElementId);
+    // Create modified elements array if dragging a point or drawing with temp points
+    let renderElements = elements;
+    
+    // If dragging a point with select tool, show temp position
+    if (draggedPointId && draggedPointPos) {
+      renderElements = elements.map(el => {
+        if (el.id === draggedPointId && el.type === 'point') {
+          return { ...el, x: draggedPointPos.x, y: draggedPointPos.y };
+        }
+        return el;
+      });
+    }
+    
+    // If drawing a line or circle, add temp first point to render
+    if (isDrawing && tempData) {
+      const tempPoint = (tempData.p1 || tempData.center) as Point | undefined;
+      if (tempPoint) {
+        renderElements = [...renderElements, tempPoint];
+      }
+    }
+    
+    renderer.render(renderElements, null, store.hoveredElementId);
     
     // Render preview intersections if in intersect tool mode
     if (selectedTool === 'intersect' && previewIntersections.length > 0) {
@@ -141,7 +167,7 @@ export default function AppCanvas() {
         renderer.drawIntersectionPreview(intersection, isHovered);
       });
     }
-  }, [elements, canvasSize, snapTarget, isDrawing, zoom, pan, store.hoveredElementId, selectedTool, previewIntersections, hoveredIntersectionIndex]);
+  }, [elements, canvasSize, snapTarget, isDrawing, zoom, pan, store.hoveredElementId, selectedTool, previewIntersections, hoveredIntersectionIndex, draggedPointId, draggedPointPos, tempData]);
 
   // Mouse handlers
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -167,6 +193,13 @@ export default function AppCanvas() {
     const worldX = (screenX - pan.x) / zoom;
     const worldY = (screenY - pan.y) / zoom;
     setMousePos({ x: worldX, y: worldY });
+
+    // Handle point dragging with select tool
+    if (selectedTool === 'select' && draggedPointId) {
+      // Update temporary drag position (doesn't affect store until mouseUp)
+      setDraggedPointPos({ x: worldX, y: worldY });
+      return;
+    }
 
     // Simple snap detection
     const points = elements.filter(el => el.type === 'point') as Point[];
@@ -238,6 +271,20 @@ export default function AppCanvas() {
     return null;
   };
 
+  // Find which point is clicked for dragging (only free/fixed points)
+  const findClickedPoint = (mouse: Vec2): Point | null => {
+    const threshold = 10 / zoom;
+    for (const el of elements) {
+      if (el.type === 'point' && el.isFixed) { // Only drag man-made points
+        const dist = Math.hypot(el.x - mouse.x, el.y - mouse.y);
+        if (dist < threshold) {
+          return el;
+        }
+      }
+    }
+    return null;
+  };
+
   // Find which geometric element (line or circle) is clicked
   const findClickedElement = (mouse: Vec2): GeoElement | null => {
     const threshold = 10 / zoom; // Click threshold in world space
@@ -299,6 +346,20 @@ export default function AppCanvas() {
       return;
     }
     
+    // Handle select/move tool
+    if (selectedTool === 'select') {
+      const clickedPoint = findClickedPoint(mousePos);
+      if (clickedPoint && clickedPoint.isFixed) {
+        // Start dragging the point
+        setDraggedPointId(clickedPoint.id);
+        setDragOriginalPos({ x: clickedPoint.x, y: clickedPoint.y });
+        setDraggedPointPos({ x: clickedPoint.x, y: clickedPoint.y });
+        return;
+      }
+      // If no point clicked, allow panning (handled by right-click above)
+      return;
+    }
+    
     // Handle intersection tool
     if (selectedTool === 'intersect') {
       // If user clicked near a preview intersection, create a permanent point there
@@ -330,6 +391,13 @@ export default function AppCanvas() {
     };
 
     if (selectedTool === 'point') {
+      // Check if a point already exists at this position
+      const existingPoint = findExistingPoint(pos.x, pos.y, 2 / zoom); // Small epsilon in world units
+      if (existingPoint) {
+        // Don't create duplicate - point already exists
+        return;
+      }
+      
       const point: Point = {
         id: generateId(),
         type: 'point',
@@ -340,26 +408,54 @@ export default function AppCanvas() {
       store.addElement(point);
     } else if (selectedTool === 'line') {
       if (!isDrawing) {
-        const startPoint: Point = {
-          id: generateId(),
-          type: 'point',
-          x: pos.x,
-          y: pos.y,
-          isFixed: true
-        };
-        store.startConstruction({ p1Id: startPoint.id });
-        store.addElement(startPoint);
+        // Check for existing point, or create new one
+        let startPoint = findExistingPoint(pos.x, pos.y, 2 / zoom);
+        const isNewPoint = !startPoint;
+        
+        if (!startPoint) {
+          startPoint = {
+            id: generateId(),
+            type: 'point',
+            x: pos.x,
+            y: pos.y,
+            isFixed: true
+          };
+        }
+        
+        // Store point in tempData, don't add to elements yet
+        store.startConstruction({ 
+          p1Id: startPoint.id, 
+          p1: startPoint,
+          p1IsNew: isNewPoint 
+        });
       } else {
-        const endPoint: Point = {
-          id: generateId(),
-          type: 'point',
-          x: pos.x,
-          y: pos.y,
-          isFixed: true
-        };
-        const p1 = elements.find(el => el.id === tempData.p1Id) as Point;
+        // Check for existing point, or create new one
+        let endPoint = findExistingPoint(pos.x, pos.y, 2 / zoom);
+        const p1 = tempData.p1 as Point;
+        const p1IsNew = tempData.p1IsNew as boolean;
+        const isNewEndPoint = !endPoint;
+        
+        if (!endPoint) {
+          endPoint = {
+            id: generateId(),
+            type: 'point',
+            x: pos.x,
+            y: pos.y,
+            isFixed: true
+          };
+        }
+        
         if (p1) {
-          store.addElement(endPoint);
+          // Collect all new elements to add in one batch (single undo entry)
+          const elementsToAdd: GeoElement[] = [];
+          
+          if (p1IsNew) {
+            elementsToAdd.push(p1);
+          }
+          if (isNewEndPoint) {
+            elementsToAdd.push(endPoint);
+          }
+          
           const line: Line = {
             id: generateId(),
             type: 'line',
@@ -367,39 +463,73 @@ export default function AppCanvas() {
             p2Id: endPoint.id,
             infinite: false
           };
-          store.addElement(line);
+          elementsToAdd.push(line);
+          
+          // Add all elements at once - creates single undo entry
+          store.addElements(elementsToAdd);
         }
         store.completeConstruction();
       }
     } else if (selectedTool === 'circle') {
       if (!isDrawing) {
-        const centerPoint: Point = {
-          id: generateId(),
-          type: 'point',
-          x: pos.x,
-          y: pos.y,
-          isFixed: true
-        };
-        store.startConstruction({ centerId: centerPoint.id });
-        store.addElement(centerPoint);
+        // Check for existing point, or create new one
+        let centerPoint = findExistingPoint(pos.x, pos.y, 2 / zoom);
+        const isNewPoint = !centerPoint;
+        
+        if (!centerPoint) {
+          centerPoint = {
+            id: generateId(),
+            type: 'point',
+            x: pos.x,
+            y: pos.y,
+            isFixed: true
+          };
+        }
+        
+        // Store point in tempData, don't add to elements yet
+        store.startConstruction({ 
+          centerId: centerPoint.id,
+          center: centerPoint,
+          centerIsNew: isNewPoint
+        });
       } else {
-        const radiusPoint: Point = {
-          id: generateId(),
-          type: 'point',
-          x: pos.x,
-          y: pos.y,
-          isFixed: true
-        };
-        const center = elements.find(el => el.id === tempData.centerId) as Point;
+        // Check for existing point, or create new one
+        let radiusPoint = findExistingPoint(pos.x, pos.y, 2 / zoom);
+        const center = tempData.center as Point;
+        const centerIsNew = tempData.centerIsNew as boolean;
+        const isNewRadiusPoint = !radiusPoint;
+        
+        if (!radiusPoint) {
+          radiusPoint = {
+            id: generateId(),
+            type: 'point',
+            x: pos.x,
+            y: pos.y,
+            isFixed: true
+          };
+        }
+        
         if (center) {
-          store.addElement(radiusPoint);
+          // Collect all new elements to add in one batch (single undo entry)
+          const elementsToAdd: GeoElement[] = [];
+          
+          if (centerIsNew) {
+            elementsToAdd.push(center);
+          }
+          if (isNewRadiusPoint) {
+            elementsToAdd.push(radiusPoint);
+          }
+          
           const circle: Circle = {
             id: generateId(),
             type: 'circle',
             centerId: center.id,
             radiusPointId: radiusPoint.id
           };
-          store.addElement(circle);
+          elementsToAdd.push(circle);
+          
+          // Add all elements at once - creates single undo entry
+          store.addElements(elementsToAdd);
         }
         store.completeConstruction();
       }
@@ -411,16 +541,48 @@ export default function AppCanvas() {
       setIsPanning(false);
       lastMousePosRef.current = null;
     }
+    
+    // Stop dragging and commit final position (only one undo entry)
+    if (selectedTool === 'select' && draggedPointId && draggedPointPos && dragOriginalPos) {
+      // Only update if the point actually moved
+      const moved = Math.hypot(
+        draggedPointPos.x - dragOriginalPos.x, 
+        draggedPointPos.y - dragOriginalPos.y
+      ) > 0.01;
+      
+      if (moved) {
+        // Single update to store - creates one undo entry
+        store.updateElement(draggedPointId, { 
+          x: draggedPointPos.x, 
+          y: draggedPointPos.y 
+        });
+      }
+      
+      setDraggedPointId(null);
+      setDraggedPointPos(null);
+      setDragOriginalPos(null);
+    }
   };
 
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault(); // Prevent context menu on right-click
   };
 
+  // Determine cursor style based on tool and hovered element
+  const getCursorStyle = () => {
+    if (isPanning) return 'cursor-grabbing';
+    if (selectedTool === 'select') {
+      const hoveredPoint = findClickedPoint(mousePos);
+      if (hoveredPoint && hoveredPoint.isFixed) return 'cursor-move';
+      return 'cursor-default';
+    }
+    return 'cursor-crosshair';
+  };
+
 return (
     <canvas
       ref={canvasRef}
-      className="w-screen h-screen bg-white dark:bg-gray-900 cursor-crosshair block"
+      className={`w-screen h-screen bg-white dark:bg-gray-900 ${getCursorStyle()} block`}
   onMouseMove={handleMouseMove}
   onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}

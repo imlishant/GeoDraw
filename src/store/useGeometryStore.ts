@@ -1,7 +1,5 @@
 import { create } from 'zustand';
 import type { GeoElement, Point, Line, Circle, Tool } from '../core/geometry/types';
-import { generateId } from '../core/geometry/utils';
-import { ConstraintValidator } from '../core/geometry/constraints';
 
 interface GeometryState {
   elements: GeoElement[];
@@ -12,12 +10,15 @@ interface GeometryState {
   tempData: any;
   mousePos: { x: number; y: number };
   snapTarget: { x: number; y: number } | null;
+  canUndo: boolean;
+  canRedo: boolean;
   
   // Actions
   setSelectedTool: (tool: Tool) => void;
   setHoveredElementId: (id: string | null) => void;
   updateMousePosition: (pos: { x: number; y: number }, snap: { x: number; y: number } | null) => void;
   addElement: (element: GeoElement) => void;
+  addElements: (elements: GeoElement[]) => void; // Batch add for single undo entry
   updateElement: (id: string, updates: Partial<GeoElement>) => void;
   removeElement: (id: string) => void;
   clearCanvas: () => void;
@@ -28,8 +29,8 @@ interface GeometryState {
 }
 
 // Simple history for undo/redo
-let history: GeoElement[][] = [];
-let historyIndex = -1;
+let history: GeoElement[][] = [[]];
+let historyIndex = 0;
 
 function pushToHistory(elements: GeoElement[]) {
   history = history.slice(0, historyIndex + 1);
@@ -50,6 +51,8 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
   tempData: null,
   mousePos: { x: 0, y: 0 },
   snapTarget: null,
+  canUndo: false,
+  canRedo: false,
 
   updateMousePosition: (pos, snap) => set({ mousePos: pos, snapTarget: snap }),
   setSelectedTool: (tool) => set({ selectedTool: tool }),
@@ -60,6 +63,21 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
     const newElements = [...current, element];
     set({ elements: newElements });
     pushToHistory(newElements);
+    set({
+      canUndo: historyIndex > 0,
+      canRedo: historyIndex < history.length - 1,
+    });
+  },
+
+  addElements: (elements) => {
+    const current = get().elements;
+    const newElements = [...current, ...elements];
+    set({ elements: newElements });
+    pushToHistory(newElements); // Single history entry for all elements
+    set({
+      canUndo: historyIndex > 0,
+      canRedo: historyIndex < history.length - 1,
+    });
   },
 
   updateElement: (id, updates) => {
@@ -83,6 +101,10 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
 
     set({ elements: newElements });
     pushToHistory(newElements);
+    set({
+      canUndo: historyIndex > 0,
+      canRedo: historyIndex < history.length - 1,
+    });
   },
 
   removeElement: (id) => {
@@ -90,11 +112,19 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
     const newElements = current.filter(el => el.id !== id);
     set({ elements: newElements });
     pushToHistory(newElements);
+    set({
+      canUndo: historyIndex > 0,
+      canRedo: historyIndex < history.length - 1,
+    });
   },
 
   clearCanvas: () => {
     set({ elements: [] });
     pushToHistory([]);
+    set({
+      canUndo: historyIndex > 0,
+      canRedo: historyIndex < history.length - 1,
+    });
   },
 
   startConstruction: (data) => set({ isDrawing: true, tempData: data }),
@@ -105,6 +135,10 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
     if (historyIndex > 0) {
       historyIndex--;
       set({ elements: history[historyIndex] });
+      set({
+        canUndo: historyIndex > 0,
+        canRedo: historyIndex < history.length - 1,
+      });
     }
   },
 
@@ -112,6 +146,10 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
     if (historyIndex < history.length - 1) {
       historyIndex++;
       set({ elements: history[historyIndex] });
+      set({
+        canUndo: historyIndex > 0,
+        canRedo: historyIndex < history.length - 1,
+      });
     }
   },
 }));
