@@ -2,11 +2,30 @@ import { useGeometryStore } from '../store/useGeometryStore';
 import ToolButton from './ToolButton';
 import type { Tool } from '../core/geometry/types';
 
-const tools: { id: Tool; label: string; icon: string }[] = [
+const tools: { id: Tool; label: string; icon: string; customIcon?: React.ReactNode }[] = [
   { id: 'select', label: 'Select (V)', icon: '↖' },
   { id: 'point', label: 'Point (P)', icon: '●' },
   { id: 'line', label: 'Line (L)', icon: '╱' },
   { id: 'circle', label: 'Circle (C)', icon: '○' },
+  { 
+    id: 'intersect', 
+    label: 'Intersect (I)', 
+    icon: '⨯',
+    customIcon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Top-left to bottom-right arc (dashed) */}
+        <path d="M 3 3 Q 6.5 6.5 10 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="2,2" fill="none"/>
+        {/* Bottom-right continuation (dashed) */}
+        <path d="M 10 10 Q 13.5 13.5 17 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="2,2" fill="none"/>
+        {/* Top-right to bottom-left arc (dashed) */}
+        <path d="M 17 3 Q 13.5 6.5 10 10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="2,2" fill="none"/>
+        {/* Bottom-left continuation (dashed) */}
+        <path d="M 10 10 Q 6.5 13.5 3 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="2,2" fill="none"/>
+        {/* Hollow center circle */}
+        <circle cx="10" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.5" fill="none"/>
+      </svg>
+    )
+  },
 ];
 
 export default function Toolbar() {
@@ -20,6 +39,7 @@ export default function Toolbar() {
           tool={tool.id}
           label={tool.label}
           icon={tool.icon}
+          customIcon={tool.customIcon}
           isActive={selectedTool === tool.id}
           onClick={() => setSelectedTool(tool.id)}
         />

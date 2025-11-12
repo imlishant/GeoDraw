@@ -9,6 +9,9 @@ const THEME = {
     point: '#3b82f6',  // blue-500
     pointHovered: '#ef4444', // red-500
     grid: '#f1f5f9',   // slate-100
+    highlight: '#3b82f6',  // blue-500 for highlighting
+    fixedPointBorder: '#ef4444', // red for man-made points
+    derivedPointBorder: '#9ca3af', // gray for intersection points
   },
   dark: {
     canvas: '#0f172a', // slate-900
@@ -17,6 +20,9 @@ const THEME = {
     point: '#60a5fa',  // blue-400
     pointHovered: '#f87171', // red-400
     grid: '#1e293b',   // slate-800
+    highlight: '#60a5fa',  // blue-400 for highlighting
+    fixedPointBorder: '#f87171', // red for man-made points
+    derivedPointBorder: '#9ca3af', // gray for intersection points
   }
 };
 
@@ -97,28 +103,80 @@ export class CanvasRenderer {
     
     // Scale point size inversely with zoom to maintain constant screen size
     const radius = (isHovered ? 6 : 4) / this.transform.zoom;
-    const borderWidth = 2 / this.transform.zoom;
+    const innerBorderWidth = 1.5 / this.transform.zoom;
+    const outerBorderWidth = 2 / this.transform.zoom;
     
     this.ctx.beginPath();
     this.ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
     this.ctx.fill();
     
-    // White border for visibility
+    // Inner white border for visibility
     this.ctx.strokeStyle = this.theme.canvas;
-    this.ctx.lineWidth = borderWidth;
+    this.ctx.lineWidth = innerBorderWidth;
     this.ctx.stroke();
+    
+    // Outer colored border to differentiate point types
+    // Red for fixed (man-made) points, gray for derived (intersection) points
+    this.ctx.strokeStyle = point.isFixed ? this.theme.fixedPointBorder : this.theme.derivedPointBorder;
+    this.ctx.lineWidth = outerBorderWidth;
+    this.ctx.beginPath();
+    this.ctx.arc(point.x, point.y, radius + innerBorderWidth / 2, 0, Math.PI * 2);
+    this.ctx.stroke();
+    
     this.ctx.restore();
   }
 
-  drawLine(line: Line, points: Map<string, Point>) {
+  drawLine(line: Line, points: Map<string, Point>, isHighlighted: boolean = false) {
     const p1 = points.get(line.p1Id);
     const p2 = points.get(line.p2Id);
     if (!p1 || !p2) return;
 
+    // Draw infinite extension (continuous, dull or highlighted)
     this.ctx.save();
-    this.ctx.strokeStyle = this.theme.elementStroke;
-    // Scale line width inversely with zoom to maintain constant screen width
-    this.ctx.lineWidth = 2 / this.transform.zoom;
+    if (isHighlighted) {
+      this.ctx.strokeStyle = this.theme.highlight;
+      this.ctx.globalAlpha = 0.4;
+      this.ctx.lineWidth = 3 / this.transform.zoom;
+    } else {
+      this.ctx.strokeStyle = 'rgba(180,180,180,0.3)';
+      this.ctx.lineWidth = 1.5 / this.transform.zoom;
+    }
+    this.ctx.setLineDash([]);
+    
+    // Calculate intersection with canvas bounds
+    const { width, height } = this.ctx.canvas;
+    // Direction vector
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    if (Math.abs(dx) < 1e-8 && Math.abs(dy) < 1e-8) {
+      this.ctx.restore();
+      return;
+    }
+    // Find two far points on the line that are well outside the canvas
+    const len = Math.sqrt(dx * dx + dy * dy);
+    const ux = dx / len;
+    const uy = dy / len;
+    const big = Math.max(width, height) * 2 / this.transform.zoom;
+    const ex1 = p1.x - ux * big;
+    const ey1 = p1.y - uy * big;
+    const ex2 = p2.x + ux * big;
+    const ey2 = p2.y + uy * big;
+    this.ctx.beginPath();
+    this.ctx.moveTo(ex1, ey1);
+    this.ctx.lineTo(ex2, ey2);
+    this.ctx.stroke();
+    this.ctx.restore();
+
+    // Draw visible segment (solid)
+    this.ctx.save();
+    if (isHighlighted) {
+      this.ctx.strokeStyle = this.theme.highlight;
+      this.ctx.lineWidth = 3 / this.transform.zoom;
+    } else {
+      this.ctx.strokeStyle = this.theme.elementStroke;
+      this.ctx.lineWidth = 2 / this.transform.zoom;
+    }
+    this.ctx.setLineDash([]);
     this.ctx.beginPath();
     this.ctx.moveTo(p1.x, p1.y);
     this.ctx.lineTo(p2.x, p2.y);
@@ -126,7 +184,7 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
-  drawCircle(circle: Circle, points: Map<string, Point>) {
+  drawCircle(circle: Circle, points: Map<string, Point>, isHighlighted: boolean = false) {
     const center = points.get(circle.centerId);
     const radiusPoint = points.get(circle.radiusPointId);
     if (!center || !radiusPoint) return;
@@ -134,9 +192,13 @@ export class CanvasRenderer {
     const radius = distance(center, radiusPoint);
 
     this.ctx.save();
-    this.ctx.strokeStyle = this.theme.elementStroke;
-    // Scale stroke width inversely with zoom to maintain constant screen width
-    this.ctx.lineWidth = 2 / this.transform.zoom;
+    if (isHighlighted) {
+      this.ctx.strokeStyle = this.theme.highlight;
+      this.ctx.lineWidth = 3 / this.transform.zoom;
+    } else {
+      this.ctx.strokeStyle = this.theme.elementStroke;
+      this.ctx.lineWidth = 2 / this.transform.zoom;
+    }
     this.ctx.beginPath();
     this.ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
     this.ctx.stroke();
@@ -156,7 +218,32 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
-  render(elements: GeoElement[], hoveredId: string | null) {
+  drawIntersectionPreview(pos: { x: number; y: number }, isHovered: boolean) {
+    this.ctx.save();
+    
+    // Draw base indicator
+    this.ctx.strokeStyle = this.theme.highlight;
+    this.ctx.globalAlpha = 0.6;
+    this.ctx.lineWidth = 1.5 / this.transform.zoom;
+    this.ctx.setLineDash([]);
+    this.ctx.beginPath();
+    this.ctx.arc(pos.x, pos.y, 8 / this.transform.zoom, 0, Math.PI * 2);
+    this.ctx.stroke();
+    
+    // Draw larger highlight if hovered
+    if (isHovered) {
+      this.ctx.strokeStyle = this.theme.highlight;
+      this.ctx.globalAlpha = 0.8;
+      this.ctx.lineWidth = 2 / this.transform.zoom;
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, 15 / this.transform.zoom, 0, Math.PI * 2);
+      this.ctx.stroke();
+    }
+    
+    this.ctx.restore();
+  }
+
+  render(elements: GeoElement[], hoveredId: string | null, hoveredElementId: string | null = null) {
     this.applyTransform();
     const points = new Map<string, Point>();
     const lines: Line[] = [];
@@ -168,8 +255,8 @@ export class CanvasRenderer {
       else circles.push(el);
     });
 
-    lines.forEach(line => this.drawLine(line, points));
-    circles.forEach(circle => this.drawCircle(circle, points));
+    lines.forEach(line => this.drawLine(line, points, line.id === hoveredElementId));
+    circles.forEach(circle => this.drawCircle(circle, points, circle.id === hoveredElementId));
     points.forEach(point => this.drawPoint(point, point.id === hoveredId));
   }
 }

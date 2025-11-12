@@ -27,4 +27,4 @@ export interface Circle {
 }
 
 export type GeoElement = Point | Line | Circle;
-export type Tool = 'select' | 'point' | 'line' | 'circle' | 'perpendicular';
+export type Tool = 'select' | 'point' | 'line' | 'circle' | 'perpendicular' | 'intersect';

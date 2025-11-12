@@ -2,11 +2,12 @@ interface ToolButtonProps {
   tool: string;
   label: string;
   icon: string;
+  customIcon?: React.ReactNode;
   isActive: boolean;
   onClick: () => void;
 }
 
-export default function ToolButton({ label, icon, isActive, onClick }: ToolButtonProps) {
+export default function ToolButton({ label, icon, customIcon, isActive, onClick }: ToolButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -19,7 +20,7 @@ export default function ToolButton({ label, icon, isActive, onClick }: ToolButto
         }
       `}
     >
-      <span>{icon}</span>
+      {customIcon || <span>{icon}</span>}
     </button>
   );
 }
