@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import { useGeometryStore } from '../store/useGeometryStore';
 import { CanvasRenderer } from '../core/canvas/renderer';
-import type { Vec2, Point, Line, Circle } from '../core/geometry/types';
+import type { Vec2, Point, Line, Circle, GeoElement } from '../core/geometry/types';
 import { generateId } from '../core/geometry/utils';
+import { findIntersections, type IntersectionPoint } from '../core/geometry/intersections';
 
 // Snapping radius in pixels for magnetic point snapping
 const SNAP_RADIUS = 15;
@@ -26,6 +27,10 @@ export default function AppCanvas() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  
+  // Intersection tool state
+  const [previewIntersections, setPreviewIntersections] = useState<{ x: number; y: number }[]>([]);
+  const [hoveredIntersectionIndex, setHoveredIntersectionIndex] = useState<number | null>(null);
 
   // Initialize canvas
   useEffect(() => {
@@ -106,6 +111,14 @@ export default function AppCanvas() {
     store.updateMousePosition(mousePos, snapTarget);
   }, [mousePos, snapTarget]);
 
+  // Clear intersection selection when tool changes
+  useEffect(() => {
+    if (selectedTool !== 'intersect') {
+      setPreviewIntersections([]);
+      setHoveredIntersectionIndex(null);
+    }
+  }, [selectedTool]);
+
   // Render loop
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -119,8 +132,16 @@ export default function AppCanvas() {
       renderer.drawSnapIndicator(snapTarget);
     }
     
-    renderer.render(elements, null);
-  }, [elements, canvasSize, snapTarget, isDrawing, zoom, pan]);
+    renderer.render(elements, null, store.hoveredElementId);
+    
+    // Render preview intersections if in intersect tool mode
+    if (selectedTool === 'intersect' && previewIntersections.length > 0) {
+      previewIntersections.forEach((intersection, index) => {
+        const isHovered = index === hoveredIntersectionIndex;
+        renderer.drawIntersectionPreview(intersection, isHovered);
+      });
+    }
+  }, [elements, canvasSize, snapTarget, isDrawing, zoom, pan, store.hoveredElementId, selectedTool, previewIntersections, hoveredIntersectionIndex]);
 
   // Mouse handlers
   const handleMouseMove = (e: React.MouseEvent) => {
@@ -151,24 +172,154 @@ export default function AppCanvas() {
     const points = elements.filter(el => el.type === 'point') as Point[];
     const snap = findSnapTarget({ x: worldX, y: worldY }, points);
     setSnapTarget(snap);
+    
+    // Update hovered element for highlighting
+    if (selectedTool === 'intersect' || selectedTool === 'select') {
+      const hoveredEl = findClickedElement({ x: worldX, y: worldY });
+      store.setHoveredElementId(hoveredEl?.id || null);
+      
+      // In intersect mode, show ALL intersections between hovered element and all other elements
+      if (selectedTool === 'intersect' && hoveredEl && hoveredEl.type !== 'point') {
+        const pointsMap = new Map<string, Point>();
+        elements.forEach(el => {
+          if (el.type === 'point') pointsMap.set(el.id, el);
+        });
+        
+        // Find all intersections with other elements
+        const allIntersections: IntersectionPoint[] = [];
+        elements.forEach(el => {
+          if (el.type !== 'point' && el.id !== hoveredEl.id) {
+            const ints = findIntersections(hoveredEl, el, pointsMap);
+            allIntersections.push(...ints);
+          }
+        });
+        
+        setPreviewIntersections(allIntersections);
+        
+        // Find which intersection is closest to mouse
+        if (allIntersections.length > 0) {
+          let closestIndex = 0;
+          let closestDist = Infinity;
+          allIntersections.forEach((int, idx) => {
+            const dist = Math.hypot(int.x - worldX, int.y - worldY);
+            if (dist < closestDist) {
+              closestDist = dist;
+              closestIndex = idx;
+            }
+          });
+          // Only highlight if within reasonable distance (15px hit radius)
+          if (closestDist < 15 / zoom) {
+            setHoveredIntersectionIndex(closestIndex);
+          } else {
+            setHoveredIntersectionIndex(null);
+          }
+        } else {
+          setHoveredIntersectionIndex(null);
+        }
+      } else {
+        setPreviewIntersections([]);
+        setHoveredIntersectionIndex(null);
+      }
+    } else {
+      store.setHoveredElementId(null);
+      setPreviewIntersections([]);
+      setHoveredIntersectionIndex(null);
+    }
   };
 
   // Only snap to existing points within SNAP_RADIUS; no grid snap
   const findSnapTarget = (mouse: Vec2, points: Point[]): Vec2 | null => {
     for (const point of points) {
       const dist = Math.hypot(point.x - mouse.x, point.y - mouse.y);
-      if (dist < SNAP_RADIUS) {
+      if (dist < SNAP_RADIUS / zoom) {
         return { x: point.x, y: point.y };
       }
     }
     return null;
   };
 
+  // Find which geometric element (line or circle) is clicked
+  const findClickedElement = (mouse: Vec2): GeoElement | null => {
+    const threshold = 10 / zoom; // Click threshold in world space
+    
+    // Check circles first
+    for (const el of elements) {
+      if (el.type === 'circle') {
+        const center = elements.find(e => e.id === el.centerId) as Point;
+        const radiusPoint = elements.find(e => e.id === el.radiusPointId) as Point;
+        if (center && radiusPoint) {
+          const radius = Math.hypot(radiusPoint.x - center.x, radiusPoint.y - center.y);
+          const distToCenter = Math.hypot(mouse.x - center.x, mouse.y - center.y);
+          if (Math.abs(distToCenter - radius) < threshold) {
+            return el;
+          }
+        }
+      }
+    }
+    
+    // Check lines
+    for (const el of elements) {
+      if (el.type === 'line') {
+        const p1 = elements.find(e => e.id === el.p1Id) as Point;
+        const p2 = elements.find(e => e.id === el.p2Id) as Point;
+        if (p1 && p2) {
+          // Distance from point to line segment
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const len2 = dx * dx + dy * dy;
+          if (len2 === 0) continue;
+          
+          // For lines, check the infinite extension (distance from point to infinite line)
+          const distToInfiniteLine = Math.abs((dy * mouse.x - dx * mouse.y + p2.x * p1.y - p2.y * p1.x) / Math.sqrt(len2));
+          
+          if (distToInfiniteLine < threshold) {
+            return el;
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+
+  // Helper: find existing point at (x, y) within epsilon
+  const findExistingPoint = (x: number, y: number, epsilon = 1e-2) => {
+    return (elements.find(
+      el => el.type === 'point' && Math.hypot(el.x - x, el.y - y) < epsilon
+    ) as Point | undefined);
+  };
+
+
+
   const handleMouseDown = (e: React.MouseEvent) => {
     // Right-click to start panning
     if (e.button === 2) {
       e.preventDefault();
       setIsPanning(true);
+      return;
+    }
+    
+    // Handle intersection tool
+    if (selectedTool === 'intersect') {
+      // If user clicked near a preview intersection, create a permanent point there
+      if (previewIntersections.length > 0 && hoveredIntersectionIndex !== null) {
+        const intersection = previewIntersections[hoveredIntersectionIndex];
+        
+        // Check for existing point at intersection
+        const existing = findExistingPoint(intersection.x, intersection.y, 1.5 / zoom);
+        if (!existing) {
+          // Create new intersection point
+          const point: Point = {
+            id: generateId(),
+            type: 'point',
+            x: intersection.x,
+            y: intersection.y,
+            isFixed: false // intersection points are derived, not fixed
+          };
+          store.addElement(point);
+        }
+        // Keep tool active - don't reset anything, ready for next intersection
+      }
       return;
     }
     

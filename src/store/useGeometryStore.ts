@@ -7,6 +7,7 @@ interface GeometryState {
   elements: GeoElement[];
   selectedTool: Tool;
   selectedElementId: string | null;
+  hoveredElementId: string | null;
   isDrawing: boolean;
   tempData: any;
   mousePos: { x: number; y: number };
@@ -14,6 +15,7 @@ interface GeometryState {
   
   // Actions
   setSelectedTool: (tool: Tool) => void;
+  setHoveredElementId: (id: string | null) => void;
   updateMousePosition: (pos: { x: number; y: number }, snap: { x: number; y: number } | null) => void;
   addElement: (element: GeoElement) => void;
   updateElement: (id: string, updates: Partial<GeoElement>) => void;
@@ -43,6 +45,7 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
   elements: [],
   selectedTool: 'select',
   selectedElementId: null,
+  hoveredElementId: null,
   isDrawing: false,
   tempData: null,
   mousePos: { x: 0, y: 0 },
@@ -50,6 +53,7 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
 
   updateMousePosition: (pos, snap) => set({ mousePos: pos, snapTarget: snap }),
   setSelectedTool: (tool) => set({ selectedTool: tool }),
+  setHoveredElementId: (id) => set({ hoveredElementId: id }),
 
   addElement: (element) => {
     const current = get().elements;
