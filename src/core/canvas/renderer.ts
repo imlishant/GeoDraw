@@ -100,29 +100,48 @@ export class CanvasRenderer {
   drawPoint(point: Point, isHovered: boolean) {
     this.ctx.save();
     this.ctx.fillStyle = isHovered ? this.theme.pointHovered : this.theme.point;
-    
     // Scale point size inversely with zoom to maintain constant screen size
     const radius = (isHovered ? 6 : 4) / this.transform.zoom;
     const innerBorderWidth = 1.5 / this.transform.zoom;
     const outerBorderWidth = 2 / this.transform.zoom;
-    
     this.ctx.beginPath();
     this.ctx.arc(point.x, point.y, radius, 0, Math.PI * 2);
     this.ctx.fill();
-    
     // Inner white border for visibility
     this.ctx.strokeStyle = this.theme.canvas;
     this.ctx.lineWidth = innerBorderWidth;
     this.ctx.stroke();
-    
     // Outer colored border to differentiate point types
-    // Red for fixed (man-made) points, gray for derived (intersection) points
     this.ctx.strokeStyle = point.isFixed ? this.theme.fixedPointBorder : this.theme.derivedPointBorder;
     this.ctx.lineWidth = outerBorderWidth;
     this.ctx.beginPath();
     this.ctx.arc(point.x, point.y, radius + innerBorderWidth / 2, 0, Math.PI * 2);
     this.ctx.stroke();
-    
+
+    // Draw label if present
+    if (point.label) {
+      this.ctx.save();
+      // Font size is constant (not scaled by zoom)
+      const fontSize = 18 / this.transform.zoom;
+      // Use Fira Mono, fallback to monospace
+      this.ctx.font = `bold ${fontSize}px 'Fira Mono', 'Menlo', 'Consolas', monospace`;
+      this.ctx.textAlign = 'center';
+      this.ctx.textBaseline = 'bottom';
+      // Theme-adaptive label color: blue for light, orange for dark
+      const isDark = document.documentElement.classList.contains('dark');
+      const labelColor = isDark ? '#ffb347' : '#1a4fff';
+      const outlineColor = isDark ? '#222' : '#fff';
+      this.ctx.fillStyle = labelColor;
+      this.ctx.strokeStyle = outlineColor;
+      this.ctx.lineWidth = 2.5 / this.transform.zoom;
+      // Slightly smaller gap for better appearance
+      const gap = radius + 6 / this.transform.zoom;
+      // Draw outline for readability
+      this.ctx.strokeText(point.label, point.x, point.y - gap);
+      // Draw label text
+      this.ctx.fillText(point.label, point.x, point.y - gap);
+      this.ctx.restore();
+    }
     this.ctx.restore();
   }
 

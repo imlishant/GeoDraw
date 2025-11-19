@@ -4,6 +4,7 @@ import type { Tool } from '../core/geometry/types';
 
 const tools: { id: Tool; label: string; icon: string; customIcon?: React.ReactNode }[] = [
   { id: 'select', label: 'Select (V)', icon: '↖' },
+  { id: 'label', label: 'Label (A)', icon: 'A' },
   { 
     id: 'point', 
     label: 'Point (P)', 

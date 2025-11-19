@@ -3,6 +3,7 @@ import { useGeometryStore } from '../store/useGeometryStore';
 import { CanvasRenderer } from '../core/canvas/renderer';
 import type { Vec2, Point, Line, Circle, GeoElement } from '../core/geometry/types';
 import { generateId } from '../core/geometry/utils';
+import LabelTool, { handleLabelClick } from './LabelTool';
 import { findIntersections, type IntersectionPoint } from '../core/geometry/intersections';
 
 // Snapping radius in pixels for magnetic point snapping
@@ -579,14 +580,19 @@ export default function AppCanvas() {
     return 'cursor-crosshair';
   };
 
-return (
-    <canvas
-      ref={canvasRef}
-      className={`w-screen h-screen bg-white dark:bg-gray-900 ${getCursorStyle()} block`}
-  onMouseMove={handleMouseMove}
-  onMouseDown={handleMouseDown}
-      onMouseUp={handleMouseUp}
-      onContextMenu={handleContextMenu}
-    />
+  return (
+    <>
+      <canvas
+        ref={canvasRef}
+        className={`w-screen h-screen bg-white dark:bg-gray-900 ${getCursorStyle()} block`}
+        onMouseMove={handleMouseMove}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onContextMenu={handleContextMenu}
+        onClick={selectedTool === 'label' ? (e => handleLabelClick(e, elements)) : undefined}
+      />
+      {/* Attach LabelTool logic for click/double-click labeling */}
+      {selectedTool === 'label' && <LabelTool />}
+    </>
   );
 }
