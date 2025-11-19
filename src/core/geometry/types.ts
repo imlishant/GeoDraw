@@ -9,6 +9,7 @@ export interface Point {
   x: number;
   y: number;
   isFixed: boolean; // true = user placed, false = intersection/derived
+  label?: string; // Optional label (A-Z)
 }
 
 export interface Line {
@@ -27,4 +28,4 @@ export interface Circle {
 }
 
 export type GeoElement = Point | Line | Circle;
-export type Tool = 'select' | 'point' | 'line' | 'circle' | 'perpendicular' | 'intersect';
+export type Tool = 'select' | 'label' | 'point' | 'line' | 'circle' | 'perpendicular' | 'intersect';
