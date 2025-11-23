@@ -38,10 +38,25 @@ const tools: { id: Tool; label: string; icon: string; customIcon?: React.ReactNo
         {/* Horizontal segment line (dull) */}
         <line x1="2" y1="10" x2="18" y2="10" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
         {/* Vertical bisector (bold, centered with equal spacing) */}
-        <line x1="10" y1="3" x2="10" y2="17" stroke="currentColor" strokeWidth="2.5"/>
+        <line x1="10" y1="1" x2="10" y2="19" stroke="currentColor" strokeWidth="2.5"/>
         {/* Two points at ends of segment */}
         <circle cx="2" cy="10" r="1.2" fill="currentColor"/>
         <circle cx="18" cy="10" r="1.2" fill="currentColor"/>
+      </svg>
+    )
+  },
+  { 
+    id: 'perpendicular_line', 
+    label: 'Perp. Line (P)', 
+    icon: '⊥',
+    customIcon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Horizontal reference line at bottom (dull) */}
+        <line x1="2" y1="19" x2="18" y2="19" stroke="currentColor" strokeWidth="1" opacity="0.5"/>
+        {/* Vertical perpendicular line (solid, thick) - extends from bottom */}
+        <line x1="10" y1="1" x2="10" y2="19" stroke="currentColor" strokeWidth="2.5"/>
+        {/* Point at intersection */}
+        {/* <circle cx="10" cy="14" r="1.5" fill="currentColor"/> */}
       </svg>
     )
   },

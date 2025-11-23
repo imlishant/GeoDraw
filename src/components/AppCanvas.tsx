@@ -6,6 +6,8 @@ import { generateId } from '../core/geometry/utils';
 import LabelTool, { handleLabelClick } from './LabelTool';
 import { handlePerpendicularBisectorClick } from './PerpendicularBisectorTool';
 import PerpendicularBisectorTool from './PerpendicularBisectorTool';
+import { handlePerpendicularLineClick } from './PerpendicularLineTool';
+import PerpendicularLineTool from './PerpendicularLineTool';
 import { findIntersections, type IntersectionPoint } from '../core/geometry/intersections';
 
 // Snapping radius in pixels for magnetic point snapping
@@ -161,7 +163,7 @@ export default function AppCanvas() {
       }
     }
     
-    renderer.render(renderElements, null, store.hoveredElementId);
+    renderer.render(renderElements, null, store.hoveredElementId, tempData?.selectedLine?.id || null);
     
     // Render preview intersections if in intersect tool mode
     if (selectedTool === 'intersect' && previewIntersections.length > 0) {
@@ -225,7 +227,7 @@ export default function AppCanvas() {
         const allIntersections: IntersectionPoint[] = [];
         elements.forEach(el => {
           if (el.type !== 'point' && el.id !== hoveredEl.id) {
-            const ints = findIntersections(hoveredEl, el, pointsMap);
+            const ints = findIntersections(hoveredEl, el, pointsMap, elements);
             allIntersections.push(...ints);
           }
         });
@@ -333,6 +335,62 @@ export default function AppCanvas() {
           const distToBisector = Math.abs(perpY * (mouse.x - bisectMidX) - perpX * (mouse.y - bisectMidY));
           
           if (distToBisector < threshold) {
+            return el;
+          }
+        }
+      }
+    }
+
+    // Check perpendicular lines
+    for (const el of elements) {
+      if (el.type === 'perpendicular_line') {
+        const point = elements.find(e => e.id === el.pointId) as Point;
+        if (!point) continue;
+        
+        // Get the reference geometry (line or perpendicular_bisector)
+        const refEl = elements.find(e => e.id === el.referenceLineId);
+        if (!refEl) continue;
+        
+        let refP1: Point | undefined;
+        let refP2: Point | undefined;
+        
+        // Extract two points from reference geometry
+        if (refEl.type === 'line' || refEl.type === 'perpendicular_bisector') {
+          refP1 = elements.find(e => e.id === refEl.p1Id) as Point;
+          refP2 = elements.find(e => e.id === refEl.p2Id) as Point;
+        } else if (refEl.type === 'perpendicular_line') {
+          const refRefEl = elements.find(e => e.id === refEl.referenceLineId);
+          if (refRefEl && (refRefEl.type === 'line' || refRefEl.type === 'perpendicular_bisector')) {
+            refP1 = elements.find(e => e.id === refRefEl.p1Id) as Point;
+            refP2 = elements.find(e => e.id === refRefEl.p2Id) as Point;
+          }
+        }
+        
+        if (refP1 && refP2) {
+          // Get perpendicular direction from reference line
+          let refDx = refP2.x - refP1.x;
+          let refDy = refP2.y - refP1.y;
+          let refLen = Math.hypot(refDx, refDy);
+          if (refLen < 1e-8) continue;
+          
+          // For perpendicular bisectors, the direction is perpendicular to the segment
+          if (refEl.type === 'perpendicular_bisector') {
+            const segDx = refDx;
+            const segDy = refDy;
+            refDx = -segDy;
+            refDy = segDx;
+            refLen = Math.hypot(refDx, refDy);
+          }
+          
+          // Perpendicular direction (rotated 90 degrees)
+          const perpX = -refDy / refLen;
+          const perpY = refDx / refLen;
+          
+          // Distance from mouse to perpendicular line (infinite line through point)
+          // Line equation: perpY * (x - pointX) - perpX * (y - pointY) = 0
+          const distToPerpLine = Math.abs(perpY * (mouse.x - point.x) - perpX * (mouse.y - point.y));
+          
+          if (distToPerpLine < threshold) {
             return el;
           }
         }
@@ -580,6 +638,8 @@ export default function AppCanvas() {
       }
     } else if (selectedTool === 'perpendicular_bisector') {
       handlePerpendicularBisectorClick(pos.x, pos.y, elements, isDrawing, tempData, zoom, store);
+    } else if (selectedTool === 'perpendicular_line') {
+      handlePerpendicularLineClick(pos.x, pos.y, elements, isDrawing, tempData, zoom, store);
     }
   };
 
@@ -641,6 +701,8 @@ export default function AppCanvas() {
       {selectedTool === 'label' && <LabelTool />}
       {/* Attach PerpendicularBisectorTool logic */}
       {selectedTool === 'perpendicular_bisector' && <PerpendicularBisectorTool />}
+      {/* Attach PerpendicularLineTool logic */}
+      {selectedTool === 'perpendicular_line' && <PerpendicularLineTool />}
     </>
   );
 }

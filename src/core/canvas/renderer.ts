@@ -1,4 +1,4 @@
-import type { GeoElement, Point, Line, Circle, PerpendicularBisector } from '../geometry/types';
+import type { GeoElement, Point, Line, Circle, PerpendicularBisector, PerpendicularLine } from '../geometry/types';
 import { distance } from '../geometry/utils';
 
 const THEME = {
@@ -372,6 +372,127 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
+  drawPerpendicularLine(perpLine: PerpendicularLine, points: Map<string, Point>, allElements: GeoElement[], isHighlighted: boolean = false) {
+    const point = points.get(perpLine.pointId);
+    if (!point) return;
+
+    // Find the reference line (could be Line or PerpendicularBisector)
+    const refElement = allElements.find(el => el.id === perpLine.referenceLineId);
+    if (!refElement) return;
+
+    let p1: Point | undefined;
+    let p2: Point | undefined;
+
+    if (refElement.type === 'line') {
+      p1 = points.get(refElement.p1Id);
+      p2 = points.get(refElement.p2Id);
+    } else if (refElement.type === 'perpendicular_bisector') {
+      p1 = points.get(refElement.p1Id);
+      p2 = points.get(refElement.p2Id);
+    } else if (refElement.type === 'perpendicular_line') {
+      // For perpendicular line as reference, get its reference element
+      const refRefElement = allElements.find(el => el.id === refElement.referenceLineId);
+      if (!refRefElement) return;
+      if (refRefElement.type === 'line' || refRefElement.type === 'perpendicular_bisector') {
+        p1 = points.get(refRefElement.p1Id);
+        p2 = points.get(refRefElement.p2Id);
+      }
+    }
+
+    if (!p1 || !p2) return;
+
+    // Direction of reference line
+    let refDx = p2.x - p1.x;
+    let refDy = p2.y - p1.y;
+    let refLen = Math.hypot(refDx, refDy);
+
+    if (refLen < 1e-8) return;
+
+    // For perpendicular bisectors, the direction is perpendicular to the segment
+    if (refElement.type === 'perpendicular_bisector') {
+      // The segment direction
+      const segDx = refDx;
+      const segDy = refDy;
+      // Rotate 90 degrees to get the bisector direction
+      refDx = -segDy;
+      refDy = segDx;
+      refLen = Math.hypot(refDx, refDy);
+    } else if (refElement.type === 'perpendicular_line') {
+      // For perpendicular line, the direction is the direction of that perpendicular line
+      const refRefElement = allElements.find(el => el.id === refElement.referenceLineId);
+      if (refRefElement && (refRefElement.type === 'line' || refRefElement.type === 'perpendicular_bisector')) {
+        const refRefP1 = points.get(refRefElement.p1Id);
+        const refRefP2 = points.get(refRefElement.p2Id);
+        if (refRefP1 && refRefP2) {
+          let refRefDx = refRefP2.x - refRefP1.x;
+          let refRefDy = refRefP2.y - refRefP1.y;
+          const refRefLen = Math.hypot(refRefDx, refRefDy);
+          if (refRefLen > 1e-8) {
+            // If perpendicular bisector, rotate to get bisector direction
+            if (refRefElement.type === 'perpendicular_bisector') {
+              const segDx = refRefDx;
+              const segDy = refRefDy;
+              refRefDx = -segDy;
+              refRefDy = segDx;
+            }
+            // The perpendicular to the perpendicular is the original direction
+            refDx = -refRefDy;
+            refDy = refRefDx;
+            refLen = Math.hypot(refDx, refDy);
+          }
+        }
+      }
+    }
+
+    // Perpendicular direction (rotated 90 degrees)
+    const perpX = -refDy / refLen;
+    const perpY = refDx / refLen;
+
+    // Draw the infinite perpendicular line through the point
+    this.ctx.save();
+    if (isHighlighted) {
+      this.ctx.strokeStyle = this.theme.highlight;
+      this.ctx.globalAlpha = 0.4;
+      this.ctx.lineWidth = 3 / this.transform.zoom;
+    } else {
+      this.ctx.strokeStyle = this.theme.elementStroke;
+      this.ctx.lineWidth = 2 / this.transform.zoom;
+    }
+    this.ctx.setLineDash([]);
+
+    // Calculate intersection with canvas bounds
+    const { width, height } = this.ctx.canvas;
+    const big = Math.max(width, height) * 2 / this.transform.zoom;
+    const extStart1X = point.x - perpX * big;
+    const extStart1Y = point.y - perpY * big;
+    const extStart2X = point.x + perpX * big;
+    const extStart2Y = point.y + perpY * big;
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(extStart1X, extStart1Y);
+    this.ctx.lineTo(extStart2X, extStart2Y);
+    this.ctx.stroke();
+    this.ctx.restore();
+
+    // Draw small right angle indicator at the point
+    const cornerSize = 6 / this.transform.zoom;
+    const corner1X = point.x + perpX * cornerSize;
+    const corner1Y = point.y + perpY * cornerSize;
+    const corner2X = corner1X + (refDx / refLen) * cornerSize;
+    const corner2Y = corner1Y + (refDy / refLen) * cornerSize;
+    const corner3X = point.x + (refDx / refLen) * cornerSize;
+    const corner3Y = point.y + (refDy / refLen) * cornerSize;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = isHighlighted ? this.theme.highlight : 'rgba(180,180,180,0.7)';
+    this.ctx.lineWidth = 1.5 / this.transform.zoom;
+    this.ctx.beginPath();
+    this.ctx.moveTo(corner1X, corner1Y);
+    this.ctx.lineTo(corner2X, corner2Y);
+    this.ctx.lineTo(corner3X, corner3Y);
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
 
   drawSnapIndicator(pos: { x: number; y: number }) {
     this.ctx.save();
@@ -411,23 +532,31 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
-  render(elements: GeoElement[], hoveredId: string | null, hoveredElementId: string | null = null) {
+  render(
+    elements: GeoElement[], 
+    hoveredId: string | null, 
+    hoveredElementId: string | null = null,
+    selectedReferenceLineId: string | null = null
+  ) {
     this.applyTransform();
     const points = new Map<string, Point>();
     const lines: Line[] = [];
     const circles: Circle[] = [];
     const bisectors: PerpendicularBisector[] = [];
+    const perpLines: PerpendicularLine[] = [];
 
     elements.forEach(el => {
       if (el.type === 'point') points.set(el.id, el);
       else if (el.type === 'line') lines.push(el);
       else if (el.type === 'circle') circles.push(el);
       else if (el.type === 'perpendicular_bisector') bisectors.push(el);
+      else if (el.type === 'perpendicular_line') perpLines.push(el);
     });
 
-    lines.forEach(line => this.drawLine(line, points, line.id === hoveredElementId));
+    lines.forEach(line => this.drawLine(line, points, line.id === hoveredElementId || line.id === selectedReferenceLineId));
     circles.forEach(circle => this.drawCircle(circle, points, circle.id === hoveredElementId));
-    bisectors.forEach(bisector => this.drawPerpendicularBisector(bisector, points, bisector.id === hoveredElementId));
+    bisectors.forEach(bisector => this.drawPerpendicularBisector(bisector, points, bisector.id === hoveredElementId || bisector.id === selectedReferenceLineId));
+    perpLines.forEach(perpLine => this.drawPerpendicularLine(perpLine, points, elements, perpLine.id === hoveredElementId || perpLine.id === selectedReferenceLineId));
     points.forEach(point => this.drawPoint(point, point.id === hoveredId));
   }
 }
