@@ -34,5 +34,12 @@ export interface PerpendicularBisector {
   p2Id: string;  // Second point
 }
 
-export type GeoElement = Point | Line | Circle | PerpendicularBisector;
-export type Tool = 'select' | 'label' | 'point' | 'line' | 'circle' | 'perpendicular_bisector' | 'intersect';
+export interface PerpendicularLine {
+  id: string;
+  type: 'perpendicular_line';
+  pointId: string;      // Point the line passes through
+  referenceLineId: string;  // Line to be perpendicular to (could be line, bisector, etc.)
+}
+
+export type GeoElement = Point | Line | Circle | PerpendicularBisector | PerpendicularLine;
+export type Tool = 'select' | 'label' | 'point' | 'line' | 'circle' | 'perpendicular_bisector' | 'perpendicular_line' | 'intersect';
