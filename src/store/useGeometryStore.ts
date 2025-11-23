@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { GeoElement, Point, Line, Circle, Tool } from '../core/geometry/types';
 
-interface GeometryState {
+export interface GeometryState {
   elements: GeoElement[];
   selectedTool: Tool;
   selectedElementId: string | null;
@@ -15,6 +15,7 @@ interface GeometryState {
   
   // Actions
   setSelectedTool: (tool: Tool) => void;
+  setSelectedElementId: (id: string | null) => void;
   setHoveredElementId: (id: string | null) => void;
   updateMousePosition: (pos: { x: number; y: number }, snap: { x: number; y: number } | null) => void;
   addElement: (element: GeoElement) => void;
@@ -56,6 +57,7 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
 
   updateMousePosition: (pos, snap) => set({ mousePos: pos, snapTarget: snap }),
   setSelectedTool: (tool) => set({ selectedTool: tool }),
+  setSelectedElementId: (id) => set({ selectedElementId: id }),
   setHoveredElementId: (id) => set({ hoveredElementId: id }),
 
   addElement: (element) => {

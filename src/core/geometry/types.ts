@@ -27,5 +27,12 @@ export interface Circle {
   radiusPointId: string; // Point that defines radius
 }
 
-export type GeoElement = Point | Line | Circle;
-export type Tool = 'select' | 'label' | 'point' | 'line' | 'circle' | 'perpendicular' | 'intersect';
+export interface PerpendicularBisector {
+  id: string;
+  type: 'perpendicular_bisector';
+  p1Id: string;  // First point
+  p2Id: string;  // Second point
+}
+
+export type GeoElement = Point | Line | Circle | PerpendicularBisector;
+export type Tool = 'select' | 'label' | 'point' | 'line' | 'circle' | 'perpendicular_bisector' | 'intersect';

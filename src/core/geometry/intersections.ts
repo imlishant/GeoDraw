@@ -1,9 +1,136 @@
-import type { Point, Line, Circle, GeoElement } from './types';
+import type { Point, Line, Circle, GeoElement, PerpendicularBisector } from './types';
 import { distance } from './utils';
 
 export interface IntersectionPoint {
   x: number;
   y: number;
+}
+
+/**
+ * Helper: Convert perpendicular bisector to two points on the bisector line
+ * Returns {p1, p2} representing the infinite perpendicular bisector line
+ */
+function getBisectorLinePoints(
+  bisector: PerpendicularBisector,
+  points: Map<string, Point>
+): { p1: Point; p2: Point } | null {
+  const p1 = points.get(bisector.p1Id);
+  const p2 = points.get(bisector.p2Id);
+  if (!p1 || !p2) return null;
+
+  // Midpoint
+  const midX = (p1.x + p2.x) / 2;
+  const midY = (p1.y + p2.y) / 2;
+
+  // Direction along segment
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+
+  if (len < 1e-10) return null;
+
+  // Perpendicular direction (rotated 90 degrees)
+  const perpX = -dy / len;
+  const perpY = dx / len;
+
+  // Two points on the bisector line (far apart for intersection calculation)
+  const big = 10000;
+  return {
+    p1: { x: midX - perpX * big, y: midY - perpY * big, id: '', type: 'point', isFixed: false },
+    p2: { x: midX + perpX * big, y: midY + perpY * big, id: '', type: 'point', isFixed: false }
+  };
+}
+
+/**
+ * Find intersection between a line and a perpendicular bisector (treated as infinite line)
+ */
+export function lineBisectorIntersection(
+  line: Line,
+  bisector: PerpendicularBisector,
+  points: Map<string, Point>
+): IntersectionPoint[] {
+  const bisectorPoints = getBisectorLinePoints(bisector, points);
+  if (!bisectorPoints) return [];
+
+  // Create a temporary line object from the bisector
+  const tempBisectorLine: Line = {
+    id: 'temp',
+    type: 'line',
+    p1Id: 'temp1',
+    p2Id: 'temp2',
+    infinite: true
+  };
+
+  // Create a temporary points map with the bisector points
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1', bisectorPoints.p1);
+  tempPoints.set('temp2', bisectorPoints.p2);
+
+  return lineLineIntersection(line, tempBisectorLine, tempPoints);
+}
+
+/**
+ * Find intersection between two perpendicular bisectors (treated as infinite lines)
+ */
+export function bisectorBisectorIntersection(
+  bisector1: PerpendicularBisector,
+  bisector2: PerpendicularBisector,
+  points: Map<string, Point>
+): IntersectionPoint[] {
+  const bisectorPoints1 = getBisectorLinePoints(bisector1, points);
+  const bisectorPoints2 = getBisectorLinePoints(bisector2, points);
+
+  if (!bisectorPoints1 || !bisectorPoints2) return [];
+
+  const tempLine1: Line = {
+    id: 'temp1',
+    type: 'line',
+    p1Id: 'temp1a',
+    p2Id: 'temp1b',
+    infinite: true
+  };
+
+  const tempLine2: Line = {
+    id: 'temp2',
+    type: 'line',
+    p1Id: 'temp2a',
+    p2Id: 'temp2b',
+    infinite: true
+  };
+
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1a', bisectorPoints1.p1);
+  tempPoints.set('temp1b', bisectorPoints1.p2);
+  tempPoints.set('temp2a', bisectorPoints2.p1);
+  tempPoints.set('temp2b', bisectorPoints2.p2);
+
+  return lineLineIntersection(tempLine1, tempLine2, tempPoints);
+}
+
+/**
+ * Find intersection between a circle and a perpendicular bisector (treated as infinite line)
+ */
+export function circleBisectorIntersection(
+  circle: Circle,
+  bisector: PerpendicularBisector,
+  points: Map<string, Point>
+): IntersectionPoint[] {
+  const bisectorPoints = getBisectorLinePoints(bisector, points);
+  if (!bisectorPoints) return [];
+
+  const tempLine: Line = {
+    id: 'temp',
+    type: 'line',
+    p1Id: 'temp1',
+    p2Id: 'temp2',
+    infinite: true
+  };
+
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1', bisectorPoints.p1);
+  tempPoints.set('temp2', bisectorPoints.p2);
+
+  return lineCircleIntersection(tempLine, circle, tempPoints);
 }
 
 /**
@@ -165,10 +292,12 @@ export function findIntersections(
 ): IntersectionPoint[] {
   if (el1.type === 'point' || el2.type === 'point') return [];
   
+  // Line-line intersections
   if (el1.type === 'line' && el2.type === 'line') {
     return lineLineIntersection(el1, el2, points);
   }
   
+  // Line-circle intersections
   if (el1.type === 'line' && el2.type === 'circle') {
     return lineCircleIntersection(el1, el2, points);
   }
@@ -177,8 +306,30 @@ export function findIntersections(
     return lineCircleIntersection(el2, el1, points);
   }
   
+  // Circle-circle intersections
   if (el1.type === 'circle' && el2.type === 'circle') {
     return circleCircleIntersection(el1, el2, points);
+  }
+  
+  // Perpendicular bisector intersections (treat as infinite lines)
+  if (el1.type === 'perpendicular_bisector' && el2.type === 'line') {
+    return lineBisectorIntersection(el2, el1, points);
+  }
+  
+  if (el1.type === 'line' && el2.type === 'perpendicular_bisector') {
+    return lineBisectorIntersection(el1, el2, points);
+  }
+  
+  if (el1.type === 'perpendicular_bisector' && el2.type === 'circle') {
+    return circleBisectorIntersection(el2, el1, points);
+  }
+  
+  if (el1.type === 'circle' && el2.type === 'perpendicular_bisector') {
+    return circleBisectorIntersection(el1, el2, points);
+  }
+  
+  if (el1.type === 'perpendicular_bisector' && el2.type === 'perpendicular_bisector') {
+    return bisectorBisectorIntersection(el1, el2, points);
   }
   
   return [];

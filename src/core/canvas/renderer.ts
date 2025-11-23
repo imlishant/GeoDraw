@@ -1,4 +1,4 @@
-import type { GeoElement, Point, Line, Circle } from '../geometry/types';
+import type { GeoElement, Point, Line, Circle, PerpendicularBisector } from '../geometry/types';
 import { distance } from '../geometry/utils';
 
 const THEME = {
@@ -121,25 +121,55 @@ export class CanvasRenderer {
     // Draw label if present
     if (point.label) {
       this.ctx.save();
-      // Font size is constant (not scaled by zoom)
-      const fontSize = 18 / this.transform.zoom;
-      // Use Fira Mono, fallback to monospace
-      this.ctx.font = `bold ${fontSize}px 'Fira Mono', 'Menlo', 'Consolas', monospace`;
-      this.ctx.textAlign = 'center';
-      this.ctx.textBaseline = 'bottom';
-      // Theme-adaptive label color: blue for light, orange for dark
-      const isDark = document.documentElement.classList.contains('dark');
-      const labelColor = isDark ? '#ffb347' : '#1a4fff';
-      const outlineColor = isDark ? '#222' : '#fff';
-      this.ctx.fillStyle = labelColor;
-      this.ctx.strokeStyle = outlineColor;
-      this.ctx.lineWidth = 2.5 / this.transform.zoom;
-      // Slightly smaller gap for better appearance
-      const gap = radius + 6 / this.transform.zoom;
-      // Draw outline for readability
-      this.ctx.strokeText(point.label, point.x, point.y - gap);
-      // Draw label text
-      this.ctx.fillText(point.label, point.x, point.y - gap);
+      // Parse label to separate main letter from subscript
+      const labelMatch = point.label.match(/^([A-Z])(\d+)?$/);
+      if (labelMatch) {
+        const mainLabel = labelMatch[1];
+        const subscript = labelMatch[2];
+
+        // Font size is constant (not scaled by zoom)
+        const fontSize = 18 / this.transform.zoom;
+        const subscriptFontSize = 12 / this.transform.zoom;
+        
+        // Theme-adaptive label color: blue for light, orange for dark
+        const isDark = document.documentElement.classList.contains('dark');
+        const labelColor = isDark ? '#ffb347' : '#1a4fff';
+        const outlineColor = isDark ? '#222' : '#fff';
+        
+        // Slightly smaller gap for better appearance
+        const gap = radius + 1 / this.transform.zoom;
+        
+        // Draw main label with outline
+        this.ctx.font = `bold ${fontSize}px 'Fira Mono', 'Menlo', 'Consolas', monospace`;
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'bottom';
+        this.ctx.fillStyle = labelColor;
+        this.ctx.strokeStyle = outlineColor;
+        this.ctx.lineWidth = 2.5 / this.transform.zoom;
+        
+        // Get text width to position subscript
+        const metrics = this.ctx.measureText(mainLabel);
+        const textWidth = metrics.width;
+        
+        // Draw outline for main label
+        this.ctx.strokeText(mainLabel, point.x - textWidth / 2, point.y - gap);
+        // Draw main label
+        this.ctx.fillText(mainLabel, point.x - textWidth / 2, point.y - gap);
+        
+        // Draw subscript if present
+        if (subscript) {
+          this.ctx.font = `bold ${subscriptFontSize}px 'Fira Mono', 'Menlo', 'Consolas', monospace`;
+          this.ctx.textBaseline = 'top';
+          // Position subscript directly adjacent to main label (minimal gap)
+          const subscriptX = point.x - textWidth / 2 + textWidth + 0.5 / this.transform.zoom;
+          const subscriptY = point.y - gap - 9 / this.transform.zoom;
+          
+          // Draw outline for subscript
+          this.ctx.strokeText(subscript, subscriptX, subscriptY);
+          // Draw subscript
+          this.ctx.fillText(subscript, subscriptX, subscriptY);
+        }
+      }
       this.ctx.restore();
     }
     this.ctx.restore();
@@ -224,6 +254,125 @@ export class CanvasRenderer {
     this.ctx.restore();
   }
 
+  drawPerpendicularBisector(bisector: PerpendicularBisector, points: Map<string, Point>, isHighlighted: boolean = false) {
+    const p1 = points.get(bisector.p1Id);
+    const p2 = points.get(bisector.p2Id);
+    if (!p1 || !p2) return;
+
+    // Calculate midpoint
+    const midX = (p1.x + p2.x) / 2;
+    const midY = (p1.y + p2.y) / 2;
+
+    // Direction vector from p1 to p2
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+
+    if (len < 1e-8) return; // Points are too close
+
+    // Perpendicular vector (rotated 90 degrees)
+    const perpX = -dy / len;
+    const perpY = dx / len;
+
+    // Draw segment line (p1 to p2) as dotted
+    this.ctx.save();
+    this.ctx.strokeStyle = isHighlighted ? this.theme.highlight : 'rgba(180,180,180,0.5)';
+    this.ctx.lineWidth = 1.5 / this.transform.zoom;
+    this.ctx.setLineDash([4 / this.transform.zoom, 4 / this.transform.zoom]);
+    this.ctx.beginPath();
+    this.ctx.moveTo(p1.x, p1.y);
+    this.ctx.lineTo(p2.x, p2.y);
+    this.ctx.stroke();
+    this.ctx.restore();
+
+    // Draw equal marks on segment (ticks to show equal halves)
+    const tickPerp = 3 / this.transform.zoom;
+    this.ctx.save();
+    this.ctx.strokeStyle = isHighlighted ? this.theme.highlight : 'rgba(180,180,180,0.6)';
+    this.ctx.lineWidth = 1 / this.transform.zoom;
+    
+    // Single tick mark at midpoint (perpendicular to segment)
+    const tick1X = midX + perpX * tickPerp;
+    const tick1Y = midY + perpY * tickPerp;
+    const tick2X = midX - perpX * tickPerp;
+    const tick2Y = midY - perpY * tickPerp;
+    this.ctx.beginPath();
+    this.ctx.moveTo(tick1X, tick1Y);
+    this.ctx.lineTo(tick2X, tick2Y);
+    this.ctx.stroke();
+
+    // Second tick mark on left half
+    const leftQuartX = (p1.x + midX) / 2;
+    const leftQuartY = (p1.y + midY) / 2;
+    const tick3X = leftQuartX + perpX * tickPerp;
+    const tick3Y = leftQuartY + perpY * tickPerp;
+    const tick4X = leftQuartX - perpX * tickPerp;
+    const tick4Y = leftQuartY - perpY * tickPerp;
+    this.ctx.beginPath();
+    this.ctx.moveTo(tick3X, tick3Y);
+    this.ctx.lineTo(tick4X, tick4Y);
+    this.ctx.stroke();
+
+    // Third tick mark on right half
+    const rightQuartX = (midX + p2.x) / 2;
+    const rightQuartY = (midY + p2.y) / 2;
+    const tick5X = rightQuartX + perpX * tickPerp;
+    const tick5Y = rightQuartY + perpY * tickPerp;
+    const tick6X = rightQuartX - perpX * tickPerp;
+    const tick6Y = rightQuartY - perpY * tickPerp;
+    this.ctx.beginPath();
+    this.ctx.moveTo(tick5X, tick5Y);
+    this.ctx.lineTo(tick6X, tick6Y);
+    this.ctx.stroke();
+    this.ctx.restore();
+
+    // Draw perpendicular bisector line (infinite and solid)
+    this.ctx.save();
+    if (isHighlighted) {
+      this.ctx.strokeStyle = this.theme.highlight;
+      this.ctx.globalAlpha = 0.4;
+      this.ctx.lineWidth = 3 / this.transform.zoom;
+    } else {
+      this.ctx.strokeStyle = this.theme.elementStroke;
+      this.ctx.lineWidth = 2 / this.transform.zoom;
+    }
+    this.ctx.setLineDash([]);
+
+    // Calculate intersection with canvas bounds
+    const { width, height } = this.ctx.canvas;
+    const big = Math.max(width, height) * 2 / this.transform.zoom;
+    const extStart1X = midX - perpX * big;
+    const extStart1Y = midY - perpY * big;
+    const extStart2X = midX + perpX * big;
+    const extStart2Y = midY + perpY * big;
+
+    this.ctx.beginPath();
+    this.ctx.moveTo(extStart1X, extStart1Y);
+    this.ctx.lineTo(extStart2X, extStart2Y);
+    this.ctx.stroke();
+    this.ctx.restore();
+
+    // Draw right angle indicator at midpoint
+    const cornerSize = 8 / this.transform.zoom;
+    const corner1X = midX + perpX * cornerSize;
+    const corner1Y = midY + perpY * cornerSize;
+    const corner2X = corner1X + (dx / len) * cornerSize;
+    const corner2Y = corner1Y + (dy / len) * cornerSize;
+    const corner3X = midX + (dx / len) * cornerSize;
+    const corner3Y = midY + (dy / len) * cornerSize;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = isHighlighted ? this.theme.highlight : 'rgba(180,180,180,0.7)';
+    this.ctx.lineWidth = 1.5 / this.transform.zoom;
+    this.ctx.beginPath();
+    this.ctx.moveTo(corner1X, corner1Y);
+    this.ctx.lineTo(corner2X, corner2Y);
+    this.ctx.lineTo(corner3X, corner3Y);
+    this.ctx.stroke();
+    this.ctx.restore();
+  }
+
+
   drawSnapIndicator(pos: { x: number; y: number }) {
     this.ctx.save();
     this.ctx.strokeStyle = this.theme.pointHovered;
@@ -267,15 +416,18 @@ export class CanvasRenderer {
     const points = new Map<string, Point>();
     const lines: Line[] = [];
     const circles: Circle[] = [];
+    const bisectors: PerpendicularBisector[] = [];
 
     elements.forEach(el => {
       if (el.type === 'point') points.set(el.id, el);
       else if (el.type === 'line') lines.push(el);
-      else circles.push(el);
+      else if (el.type === 'circle') circles.push(el);
+      else if (el.type === 'perpendicular_bisector') bisectors.push(el);
     });
 
     lines.forEach(line => this.drawLine(line, points, line.id === hoveredElementId));
     circles.forEach(circle => this.drawCircle(circle, points, circle.id === hoveredElementId));
+    bisectors.forEach(bisector => this.drawPerpendicularBisector(bisector, points, bisector.id === hoveredElementId));
     points.forEach(point => this.drawPoint(point, point.id === hoveredId));
   }
 }

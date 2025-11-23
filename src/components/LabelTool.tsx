@@ -1,10 +1,20 @@
 import { useGeometryStore } from '../store/useGeometryStore';
 
-// Helper to get the next available label (A-Z)
+// Helper to get the next available label (A-Z, then A1-Z1, A2-Z2, etc.)
 function getNextLabel(usedLabels: string[]): string | null {
+  // First, try A-Z
   for (let i = 0; i < 26; i++) {
     const letter = String.fromCharCode(65 + i); // 'A' = 65
     if (!usedLabels.includes(letter)) return letter;
+  }
+  
+  // Then, try A1-Z1, A2-Z2, ... up to a reasonable limit
+  for (let subscript = 1; subscript <= 999; subscript++) {
+    for (let i = 0; i < 26; i++) {
+      const letter = String.fromCharCode(65 + i); // 'A' = 65
+      const label = `${letter}${subscript}`;
+      if (!usedLabels.includes(label)) return label;
+    }
   }
   return null;
 }
@@ -23,7 +33,7 @@ export function handleLabelClick(e: React.MouseEvent, elements: any[]) {
   const worldY = mousePos.y;
   // Find closest point within threshold (in world units)
   const threshold = 12; // px, but we want to use world units, so scale by zoom
-  const { width, height } = (e.currentTarget as HTMLCanvasElement);
+  const { width } = (e.currentTarget as HTMLCanvasElement);
   // Estimate zoom from canvas size and bounding rect (AppCanvas always sets canvas size to client size)
   const rect = (e.currentTarget as HTMLCanvasElement).getBoundingClientRect();
   const zoom = width / rect.width;

@@ -4,6 +4,8 @@ import { CanvasRenderer } from '../core/canvas/renderer';
 import type { Vec2, Point, Line, Circle, GeoElement } from '../core/geometry/types';
 import { generateId } from '../core/geometry/utils';
 import LabelTool, { handleLabelClick } from './LabelTool';
+import { handlePerpendicularBisectorClick } from './PerpendicularBisectorTool';
+import PerpendicularBisectorTool from './PerpendicularBisectorTool';
 import { findIntersections, type IntersectionPoint } from '../core/geometry/intersections';
 
 // Snapping radius in pixels for magnetic point snapping
@@ -305,6 +307,38 @@ export default function AppCanvas() {
       }
     }
     
+    // Check perpendicular bisectors
+    for (const el of elements) {
+      if (el.type === 'perpendicular_bisector') {
+        const p1 = elements.find(e => e.id === el.p1Id) as Point;
+        const p2 = elements.find(e => e.id === el.p2Id) as Point;
+        if (p1 && p2) {
+          // Calculate midpoint
+          const bisectMidX = (p1.x + p2.x) / 2;
+          const bisectMidY = (p1.y + p2.y) / 2;
+          
+          // Direction of segment line
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const len = Math.hypot(dx, dy);
+          if (len < 1e-8) continue;
+          
+          // Perpendicular direction (rotated 90 degrees)
+          const perpX = -dy / len;
+          const perpY = dx / len;
+          
+          // Distance from mouse to perpendicular bisector line (infinite line through midpoint)
+          // Using point-to-line distance formula: |ax + by + c| / sqrt(a^2 + b^2)
+          // Line equation: perpY * (x - midX) - perpX * (y - midY) = 0
+          const distToBisector = Math.abs(perpY * (mouse.x - bisectMidX) - perpX * (mouse.y - bisectMidY));
+          
+          if (distToBisector < threshold) {
+            return el;
+          }
+        }
+      }
+    }
+    
     // Check lines
     for (const el of elements) {
       if (el.type === 'line') {
@@ -349,15 +383,25 @@ export default function AppCanvas() {
     
     // Handle select/move tool
     if (selectedTool === 'select') {
+      // First, try to find a clicked point to drag
       const clickedPoint = findClickedPoint(mousePos);
       if (clickedPoint && clickedPoint.isFixed) {
         // Start dragging the point
         setDraggedPointId(clickedPoint.id);
         setDragOriginalPos({ x: clickedPoint.x, y: clickedPoint.y });
         setDraggedPointPos({ x: clickedPoint.x, y: clickedPoint.y });
+        store.setSelectedElementId(clickedPoint.id);
         return;
       }
-      // If no point clicked, allow panning (handled by right-click above)
+      
+      // If no point, try to select any element (line, circle, perpendicular_bisector, etc.)
+      const clickedElement = findClickedElement(mousePos);
+      if (clickedElement) {
+        store.setSelectedElementId(clickedElement.id);
+      } else {
+        store.setSelectedElementId(null);
+      }
+      // Allow panning (handled by right-click above)
       return;
     }
     
@@ -534,6 +578,8 @@ export default function AppCanvas() {
         }
         store.completeConstruction();
       }
+    } else if (selectedTool === 'perpendicular_bisector') {
+      handlePerpendicularBisectorClick(pos.x, pos.y, elements, isDrawing, tempData, zoom, store);
     }
   };
 
@@ -593,6 +639,8 @@ export default function AppCanvas() {
       />
       {/* Attach LabelTool logic for click/double-click labeling */}
       {selectedTool === 'label' && <LabelTool />}
+      {/* Attach PerpendicularBisectorTool logic */}
+      {selectedTool === 'perpendicular_bisector' && <PerpendicularBisectorTool />}
     </>
   );
 }
