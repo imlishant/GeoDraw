@@ -41,5 +41,13 @@ export interface PerpendicularLine {
   referenceLineId: string;  // Line to be perpendicular to (could be line, bisector, etc.)
 }
 
-export type GeoElement = Point | Line | Circle | PerpendicularBisector | PerpendicularLine;
-export type Tool = 'select' | 'label' | 'point' | 'line' | 'circle' | 'perpendicular_bisector' | 'perpendicular_line' | 'intersect';
+export interface AngleBisector {
+  id: string;
+  type: 'angle_bisector';
+  vertexId: string;  // Vertex of the angle
+  p1Id: string;      // First point on one ray (or on the ray from vertex)
+  p2Id: string;      // Second point on other ray (or on the other ray from vertex)
+}
+
+export type GeoElement = Point | Line | Circle | PerpendicularBisector | PerpendicularLine | AngleBisector;
+export type Tool = 'select' | 'label' | 'point' | 'line' | 'circle' | 'perpendicular_bisector' | 'perpendicular_line' | 'angle_bisector' | 'intersect';
