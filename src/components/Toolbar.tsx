@@ -61,6 +61,25 @@ const tools: { id: Tool; label: string; icon: string; customIcon?: React.ReactNo
     )
   },
   { 
+    id: 'angle_bisector', 
+    label: 'Angle Bisector (A)', 
+    icon: '∠',
+    customIcon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        {/* Sleeping V shape (Pacman mouth opening to left) - upper ray */}
+        <line x1="19" y1="2" x2="2" y2="10" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+        {/* Sleeping V shape - lower ray */}
+        <line x1="19" y1="18" x2="2" y2="10" stroke="currentColor" strokeWidth="1.5" opacity="0.6"/>
+        {/* Horizontal angle bisector line (solid, bisecting the V, extends full width) */}
+        <line x1="1" y1="10" x2="19" y2="10" stroke="currentColor" strokeWidth="2.5"/>
+        {/* Angle arc mark on upper side */}
+        <path d="M 15 5 Q 14 5 13 7" stroke="currentColor" strokeWidth="1" fill="none" opacity="0.7"/>
+        {/* Angle arc mark on lower side */}
+        <path d="M 15 15 Q 14 15 13 13" stroke="currentColor" strokeWidth="1" fill="none" opacity="0.7"/>
+      </svg>
+    )
+  },
+  { 
     id: 'intersect', 
     label: 'Intersect (I)', 
     icon: '⨯',

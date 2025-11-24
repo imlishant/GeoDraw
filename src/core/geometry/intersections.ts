@@ -1,4 +1,4 @@
-import type { Point, Line, Circle, GeoElement, PerpendicularBisector, PerpendicularLine } from './types';
+import type { Point, Line, Circle, GeoElement, PerpendicularBisector, PerpendicularLine, AngleBisector } from './types';
 import { distance } from './utils';
 
 export interface IntersectionPoint {
@@ -114,6 +114,224 @@ function getPerpLinePoints(
   };
 }
 
+/**
+ * Helper: Convert angle bisector to two points on the bisector line
+ * Returns {p1, p2} representing the infinite angle bisector line
+ */
+function getAngleBisectorLinePoints(
+  bisector: AngleBisector,
+  points: Map<string, Point>
+): { p1: Point; p2: Point } | null {
+  const vertex = points.get(bisector.vertexId);
+  const p1 = points.get(bisector.p1Id);
+  const p2 = points.get(bisector.p2Id);
+  if (!vertex || !p1 || !p2) return null;
+
+  // Ray 1: vertex → p1
+  const ray1X = p1.x - vertex.x;
+  const ray1Y = p1.y - vertex.y;
+  const ray1Len = Math.hypot(ray1X, ray1Y);
+
+  // Ray 2: vertex → p2
+  const ray2X = p2.x - vertex.x;
+  const ray2Y = p2.y - vertex.y;
+  const ray2Len = Math.hypot(ray2X, ray2Y);
+
+  if (ray1Len < 1e-8 || ray2Len < 1e-8) return null;
+
+  // Normalize rays
+  const ray1NormX = ray1X / ray1Len;
+  const ray1NormY = ray1Y / ray1Len;
+  const ray2NormX = ray2X / ray2Len;
+  const ray2NormY = ray2Y / ray2Len;
+
+  // Bisector direction: average of normalized rays
+  const bisectorX = ray1NormX + ray2NormX;
+  const bisectorY = ray1NormY + ray2NormY;
+  const bisectorLen = Math.hypot(bisectorX, bisectorY);
+
+  if (bisectorLen < 1e-8) return null;
+
+  // Normalize bisector direction
+  const bisectorNormX = bisectorX / bisectorLen;
+  const bisectorNormY = bisectorY / bisectorLen;
+
+  // Two points on the bisector line (far apart for intersection calculation)
+  const big = 10000;
+  return {
+    p1: { x: vertex.x - bisectorNormX * big, y: vertex.y - bisectorNormY * big, id: '', type: 'point', isFixed: false },
+    p2: { x: vertex.x + bisectorNormX * big, y: vertex.y + bisectorNormY * big, id: '', type: 'point', isFixed: false }
+  };
+}
+
+/**
+ * Find intersection between a line and an angle bisector (treated as infinite line)
+ */
+export function lineAngleBisectorIntersection(
+  line: Line,
+  bisector: AngleBisector,
+  points: Map<string, Point>
+): IntersectionPoint[] {
+  const bisectorPoints = getAngleBisectorLinePoints(bisector, points);
+  if (!bisectorPoints) return [];
+
+  // Create a temporary line object from the angle bisector
+  const tempBisectorLine: Line = {
+    id: 'temp',
+    type: 'line',
+    p1Id: 'temp1',
+    p2Id: 'temp2',
+    infinite: true
+  };
+
+  // Create a temporary points map with the bisector points
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1', bisectorPoints.p1);
+  tempPoints.set('temp2', bisectorPoints.p2);
+
+  return lineLineIntersection(line, tempBisectorLine, tempPoints);
+}
+
+/**
+ * Find intersection between a circle and an angle bisector (treated as infinite line)
+ */
+export function circleAngleBisectorIntersection(
+  circle: Circle,
+  bisector: AngleBisector,
+  points: Map<string, Point>
+): IntersectionPoint[] {
+  const bisectorPoints = getAngleBisectorLinePoints(bisector, points);
+  if (!bisectorPoints) return [];
+
+  const tempLine: Line = {
+    id: 'temp',
+    type: 'line',
+    p1Id: 'temp1',
+    p2Id: 'temp2',
+    infinite: true
+  };
+
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1', bisectorPoints.p1);
+  tempPoints.set('temp2', bisectorPoints.p2);
+
+  return lineCircleIntersection(tempLine, circle, tempPoints);
+}
+
+/**
+ * Find intersection between two angle bisectors (treated as infinite lines)
+ */
+export function angleBisectorAngleBisectorIntersection(
+  bisector1: AngleBisector,
+  bisector2: AngleBisector,
+  points: Map<string, Point>
+): IntersectionPoint[] {
+  const bisectorPoints1 = getAngleBisectorLinePoints(bisector1, points);
+  const bisectorPoints2 = getAngleBisectorLinePoints(bisector2, points);
+
+  if (!bisectorPoints1 || !bisectorPoints2) return [];
+
+  const tempLine1: Line = {
+    id: 'temp1',
+    type: 'line',
+    p1Id: 'temp1a',
+    p2Id: 'temp1b',
+    infinite: true
+  };
+
+  const tempLine2: Line = {
+    id: 'temp2',
+    type: 'line',
+    p1Id: 'temp2a',
+    p2Id: 'temp2b',
+    infinite: true
+  };
+
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1a', bisectorPoints1.p1);
+  tempPoints.set('temp1b', bisectorPoints1.p2);
+  tempPoints.set('temp2a', bisectorPoints2.p1);
+  tempPoints.set('temp2b', bisectorPoints2.p2);
+
+  return lineLineIntersection(tempLine1, tempLine2, tempPoints);
+}
+
+/**
+ * Find intersection between a perpendicular bisector and an angle bisector (treated as infinite lines)
+ */
+export function bisectorAngleBisectorIntersection(
+  perpBisector: PerpendicularBisector,
+  angleBisector: AngleBisector,
+  points: Map<string, Point>
+): IntersectionPoint[] {
+  const perpBisectorPoints = getBisectorLinePoints(perpBisector, points);
+  const angleBisectorPoints = getAngleBisectorLinePoints(angleBisector, points);
+
+  if (!perpBisectorPoints || !angleBisectorPoints) return [];
+
+  const tempLine1: Line = {
+    id: 'temp1',
+    type: 'line',
+    p1Id: 'temp1a',
+    p2Id: 'temp1b',
+    infinite: true
+  };
+
+  const tempLine2: Line = {
+    id: 'temp2',
+    type: 'line',
+    p1Id: 'temp2a',
+    p2Id: 'temp2b',
+    infinite: true
+  };
+
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1a', perpBisectorPoints.p1);
+  tempPoints.set('temp1b', perpBisectorPoints.p2);
+  tempPoints.set('temp2a', angleBisectorPoints.p1);
+  tempPoints.set('temp2b', angleBisectorPoints.p2);
+
+  return lineLineIntersection(tempLine1, tempLine2, tempPoints);
+}
+
+/**
+ * Find intersection between a perpendicular line and an angle bisector (treated as infinite line)
+ */
+export function perpLineAngleBisectorIntersection(
+  perpLine: PerpendicularLine,
+  bisector: AngleBisector,
+  points: Map<string, Point>,
+  allElements: GeoElement[]
+): IntersectionPoint[] {
+  const perpLinePoints = getPerpLinePoints(perpLine, points, allElements);
+  const bisectorPoints = getAngleBisectorLinePoints(bisector, points);
+
+  if (!perpLinePoints || !bisectorPoints) return [];
+
+  const tempLine1: Line = {
+    id: 'temp1',
+    type: 'line',
+    p1Id: 'temp1a',
+    p2Id: 'temp1b',
+    infinite: true
+  };
+
+  const tempLine2: Line = {
+    id: 'temp2',
+    type: 'line',
+    p1Id: 'temp2a',
+    p2Id: 'temp2b',
+    infinite: true
+  };
+
+  const tempPoints = new Map(points);
+  tempPoints.set('temp1a', perpLinePoints.p1);
+  tempPoints.set('temp1b', perpLinePoints.p2);
+  tempPoints.set('temp2a', bisectorPoints.p1);
+  tempPoints.set('temp2b', bisectorPoints.p2);
+
+  return lineLineIntersection(tempLine1, tempLine2, tempPoints);
+}
 
 /**
  * Find intersection between a line and a perpendicular line (treated as infinite line)
@@ -569,6 +787,43 @@ export function findIntersections(
   if (el1.type === 'perpendicular_line' && el2.type === 'perpendicular_line') {
     return perpLinePerpLineIntersection(el1, el2, points, allElements);
   }
-  
+
+  // Angle bisector intersections (treat as infinite lines)
+  if (el1.type === 'angle_bisector' && el2.type === 'line') {
+    return lineAngleBisectorIntersection(el2, el1, points);
+  }
+
+  if (el1.type === 'line' && el2.type === 'angle_bisector') {
+    return lineAngleBisectorIntersection(el1, el2, points);
+  }
+
+  if (el1.type === 'angle_bisector' && el2.type === 'circle') {
+    return circleAngleBisectorIntersection(el2, el1, points);
+  }
+
+  if (el1.type === 'circle' && el2.type === 'angle_bisector') {
+    return circleAngleBisectorIntersection(el1, el2, points);
+  }
+
+  if (el1.type === 'angle_bisector' && el2.type === 'perpendicular_bisector') {
+    return bisectorAngleBisectorIntersection(el2, el1, points);
+  }
+
+  if (el1.type === 'perpendicular_bisector' && el2.type === 'angle_bisector') {
+    return bisectorAngleBisectorIntersection(el1, el2, points);
+  }
+
+  if (el1.type === 'angle_bisector' && el2.type === 'perpendicular_line') {
+    return perpLineAngleBisectorIntersection(el2, el1, points, allElements);
+  }
+
+  if (el1.type === 'perpendicular_line' && el2.type === 'angle_bisector') {
+    return perpLineAngleBisectorIntersection(el1, el2, points, allElements);
+  }
+
+  if (el1.type === 'angle_bisector' && el2.type === 'angle_bisector') {
+    return angleBisectorAngleBisectorIntersection(el1, el2, points);
+  }
+
   return [];
 }
