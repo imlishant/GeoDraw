@@ -72,7 +72,8 @@ export function handlePerpendicularBisectorClick(
       id: generateId(),
       type: 'perpendicular_bisector' as const,
       p1Id: p1Id,
-      p2Id: closestPoint.id
+      p2Id: closestPoint.id,
+      dependencies: [p1Id, closestPoint.id]
     };
 
     store.addElement(bisector);

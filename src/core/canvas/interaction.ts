@@ -18,11 +18,10 @@ export class CanvasInteractionHandler {
 
   constructor(
     private elements: GeoElement[],
-    private onAddElement: (el: GeoElement) => void,
     private onUpdateElement: (id: string, updates: Partial<GeoElement>) => void,
     private onDeleteElement: (id: string) => void,
     private snapRadius: number = 15
-  ) {}
+  ) { }
 
   handleMouseMove(mousePos: Vec2): { snapTarget: Vec2 | null; hoveredId: string | null } {
     const points = this.elements.filter(el => el.type === 'point') as Point[];
@@ -39,23 +38,23 @@ export class CanvasInteractionHandler {
     );
 
     // Find hovered element
-    const hoveredPoint = points.find(p => 
+    const hoveredPoint = points.find(p =>
       Math.hypot(p.x - mousePos.x, p.y - mousePos.y) < 8
     );
-    
+
     return { snapTarget, hoveredId: hoveredPoint?.id || null };
   }
 
-  handleMouseDown(mousePos: Vec2, tool: string, snapTarget: Vec2 | null): void {
-    const targetPos = snapTarget || mousePos;
+  handleMouseDown(mousePos: Vec2, tool: string, _snapTarget: Vec2 | null): void {
+    // const targetPos = snapTarget || mousePos; // Unused
 
     if (tool === 'select') {
       // Check if clicking a point to start drag
       const points = this.elements.filter(el => el.type === 'point') as Point[];
-      const clickedPoint = points.find(p => 
+      const clickedPoint = points.find(p =>
         Math.hypot(p.x - mousePos.x, p.y - mousePos.y) < 8
       );
-      
+
       if (clickedPoint) {
         this.state.isDragging = true;
         this.state.dragStart = mousePos;
@@ -64,7 +63,7 @@ export class CanvasInteractionHandler {
     }
   }
 
-  handleMouseUp(mousePos: Vec2, tool: string, snapTarget: Vec2 | null): void {
+  handleMouseUp(_mousePos: Vec2, tool: string, _snapTarget: Vec2 | null): void {
     if (tool === 'select' && this.state.isDragging) {
       this.state.isDragging = false;
       this.state.dragStart = null;

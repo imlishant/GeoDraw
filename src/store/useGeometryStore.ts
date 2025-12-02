@@ -1,5 +1,7 @@
 import { create } from 'zustand';
-import type { GeoElement, Point, Line, Circle, Tool } from '../core/geometry/types';
+import type { GeoElement, Tool } from '../core/geometry/types';
+import { DependencyGraph } from '../core/geometry/dependencyGraph';
+import { recalculateElement } from '../core/geometry/utils';
 
 export interface GeometryState {
   elements: GeoElement[];
@@ -12,7 +14,7 @@ export interface GeometryState {
   snapTarget: { x: number; y: number } | null;
   canUndo: boolean;
   canRedo: boolean;
-  
+
   // Actions
   setSelectedTool: (tool: Tool) => void;
   setSelectedElementId: (id: string | null) => void;
@@ -33,6 +35,9 @@ export interface GeometryState {
 let history: GeoElement[][] = [[]];
 let historyIndex = 0;
 
+// Dependency Graph instance
+const graph = new DependencyGraph();
+
 function pushToHistory(elements: GeoElement[]) {
   history = history.slice(0, historyIndex + 1);
   history.push([...elements]);
@@ -41,6 +46,16 @@ function pushToHistory(elements: GeoElement[]) {
     history.shift();
     historyIndex--;
   }
+}
+
+// Helper to rebuild graph from elements (used in undo/redo)
+function rebuildGraph(elements: GeoElement[]) {
+  graph.clear();
+  elements.forEach(el => {
+    if (el.dependencies && el.dependencies.length > 0) {
+      graph.addNode(el.id, el.dependencies);
+    }
+  });
 }
 
 export const useGeometryStore = create<GeometryState>((set, get) => ({
@@ -63,6 +78,12 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
   addElement: (element) => {
     const current = get().elements;
     const newElements = [...current, element];
+
+    // Register dependencies
+    if (element.dependencies && element.dependencies.length > 0) {
+      graph.addNode(element.id, element.dependencies);
+    }
+
     set({ elements: newElements });
     pushToHistory(newElements);
     set({
@@ -74,6 +95,14 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
   addElements: (elements) => {
     const current = get().elements;
     const newElements = [...current, ...elements];
+
+    // Register dependencies
+    elements.forEach(el => {
+      if (el.dependencies && el.dependencies.length > 0) {
+        graph.addNode(el.id, el.dependencies);
+      }
+    });
+
     set({ elements: newElements });
     pushToHistory(newElements); // Single history entry for all elements
     set({
@@ -84,22 +113,31 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
 
   updateElement: (id, updates) => {
     const current = get().elements;
-    const newElements = current.map(el => {
+
+    // 1. Update the target element
+    let newElements = current.map(el => {
       if (el.id !== id) return el;
-
-      // Narrow by discriminant so TypeScript knows which shape we're updating.
-      if (el.type === 'point') {
-        return { ...el, ...(updates as Partial<typeof el>) } as Point;
-      }
-      if (el.type === 'line') {
-        return { ...el, ...(updates as Partial<typeof el>) } as Line;
-      }
-      if (el.type === 'circle') {
-        return { ...el, ...(updates as Partial<typeof el>) } as Circle;
-      }
-
-      return el;
+      return { ...el, ...updates } as GeoElement;
     });
+
+    // 2. Find dependents that need updating
+    const dependents = graph.getUpdateOrder([id]);
+
+    // 3. Recalculate dependents
+    if (dependents.length > 0) {
+      // Create a map for fast lookup during recalculation
+      const elementsMap = new Map(newElements.map(el => [el.id, el]));
+
+      dependents.forEach(depId => {
+        const el = elementsMap.get(depId);
+        if (el) {
+          const updatedEl = recalculateElement(el, elementsMap);
+          elementsMap.set(depId, updatedEl);
+        }
+      });
+
+      newElements = Array.from(elementsMap.values());
+    }
 
     set({ elements: newElements });
     pushToHistory(newElements);
@@ -111,6 +149,13 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
 
   removeElement: (id) => {
     const current = get().elements;
+    // Also remove dependents? For now, let's just remove the element and let dependents stay (maybe invalid state?)
+    // Better: Remove element and its dependents recursively?
+    // Or just remove the element and let the graph handle it (graph.removeNode doesn't cascade delete in our impl yet)
+
+    // For now, simple removal.
+    graph.removeNode(id);
+
     const newElements = current.filter(el => el.id !== id);
     set({ elements: newElements });
     pushToHistory(newElements);
@@ -121,6 +166,7 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
   },
 
   clearCanvas: () => {
+    graph.clear();
     set({ elements: [] });
     pushToHistory([]);
     set({
@@ -130,13 +176,15 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
   },
 
   startConstruction: (data) => set({ isDrawing: true, tempData: data }),
-  
+
   completeConstruction: () => set({ isDrawing: false, tempData: null }),
 
   undo: () => {
     if (historyIndex > 0) {
       historyIndex--;
-      set({ elements: history[historyIndex] });
+      const restoredElements = history[historyIndex];
+      rebuildGraph(restoredElements);
+      set({ elements: restoredElements });
       set({
         canUndo: historyIndex > 0,
         canRedo: historyIndex < history.length - 1,
@@ -147,7 +195,9 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
   redo: () => {
     if (historyIndex < history.length - 1) {
       historyIndex++;
-      set({ elements: history[historyIndex] });
+      const restoredElements = history[historyIndex];
+      rebuildGraph(restoredElements);
+      set({ elements: restoredElements });
       set({
         canUndo: historyIndex > 0,
         canRedo: historyIndex < history.length - 1,

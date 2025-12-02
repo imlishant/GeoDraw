@@ -1,4 +1,5 @@
 import type { Vec2, Point, Line, Circle, GeoElement } from './types';
+import { findIntersections } from './intersections';
 
 // Precision for floating point comparisons
 export const EPSILON = 1e-6;
@@ -42,7 +43,7 @@ export function findSnapTarget(
   mouse: Vec2,
   points: Point[],
   lines: Line[],
-  circles: Circle[],
+  _circles: Circle[],
   allElements: Map<string, GeoElement>,
   snapRadius: number
 ): Vec2 | null {
@@ -60,12 +61,12 @@ export function findSnapTarget(
       const p2 = allElements.get(lines[i].p2Id) as Point;
       const p3 = allElements.get(lines[j].p1Id) as Point;
       const p4 = allElements.get(lines[j].p2Id) as Point;
-      
+
       const inter = lineIntersection(
         { p1: { x: p1.x, y: p1.y }, p2: { x: p2.x, y: p2.y } },
         { p1: { x: p3.x, y: p3.y }, p2: { x: p4.x, y: p4.y } }
       );
-      
+
       if (inter && distance(mouse, inter) < snapRadius) {
         return inter;
       }
@@ -85,4 +86,48 @@ export function findSnapTarget(
 
 export function generateId(): string {
   return Math.random().toString(36).slice(2, 11);
+}
+
+/**
+ * Recalculate an element's geometry based on its dependencies.
+ * Currently primarily for Intersection Points.
+ */
+export function recalculateElement(
+  element: GeoElement,
+  allElements: Map<string, GeoElement>
+): GeoElement {
+  // Only Points (intersections) need coordinate recalculation
+  if (element.type === 'point' && !element.isFixed && element.dependencies && element.dependencies.length === 2) {
+    const [id1, id2] = element.dependencies;
+    const el1 = allElements.get(id1);
+    const el2 = allElements.get(id2);
+
+    if (el1 && el2) {
+      // Need to pass the map of points to findIntersections
+      // We can construct a map of just the points needed, or pass the whole map if it contains points
+      // findIntersections expects Map<string, Point>
+      const pointsMap = new Map<string, Point>();
+      for (const [id, el] of allElements.entries()) {
+        if (el.type === 'point') {
+          pointsMap.set(id, el);
+        }
+      }
+
+      // We also need to pass allElements array for some intersection types (like perp lines)
+      const allElementsArray = Array.from(allElements.values());
+
+      const intersections = findIntersections(el1, el2, pointsMap, allElementsArray);
+
+      const index = element.intersectionIndex || 0;
+      if (intersections[index]) {
+        return {
+          ...element,
+          x: intersections[index].x,
+          y: intersections[index].y
+        };
+      }
+    }
+  }
+
+  return element;
 }

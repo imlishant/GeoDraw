@@ -10,7 +10,7 @@ import { handlePerpendicularLineClick } from './PerpendicularLineTool';
 import PerpendicularLineTool from './PerpendicularLineTool';
 import { handleAngleBisectorClick } from './AngleBisectorTool';
 import AngleBisectorTool from './AngleBisectorTool';
-import { findIntersections, type IntersectionPoint } from '../core/geometry/intersections';
+import { findIntersections } from '../core/geometry/intersections';
 
 // Snapping radius in pixels for magnetic point snapping
 const SNAP_RADIUS = 15;
@@ -18,27 +18,27 @@ const SNAP_RADIUS = 15;
 export default function AppCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<CanvasRenderer | null>(null);
-  
+
   const store = useGeometryStore();
   const elements = store.elements;
   const selectedTool = store.selectedTool;
   const isDrawing = store.isDrawing;
   const tempData = store.tempData;
-  
+
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
   const [mousePos, setMousePos] = useState<Vec2>({ x: 0, y: 0 });
   const [snapTarget, setSnapTarget] = useState<Vec2 | null>(null);
-  
+
   // Zoom and pan state
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
-  
+
   // Intersection tool state
-  const [previewIntersections, setPreviewIntersections] = useState<{ x: number; y: number }[]>([]);
+  const [previewIntersections, setPreviewIntersections] = useState<{ x: number; y: number; parent1Id: string; parent2Id: string; index: number }[]>([]);
   const [hoveredIntersectionIndex, setHoveredIntersectionIndex] = useState<number | null>(null);
-  
+
   // Select/Move tool state
   const [draggedPointId, setDraggedPointId] = useState<string | null>(null);
   const [draggedPointPos, setDraggedPointPos] = useState<Vec2 | null>(null);
@@ -63,27 +63,27 @@ export default function AppCanvas() {
     // Handle mouse wheel zoom
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      
+
       const canvas = canvasRef.current;
       if (!canvas) return;
-      
+
       const rect = canvas.getBoundingClientRect();
       const mouseX = e.clientX - rect.left;
       const mouseY = e.clientY - rect.top;
-      
+
       // Calculate zoom delta
       const delta = -Math.sign(e.deltaY) * 0.1;
       const newZoom = Math.min(Math.max(zoom + delta, 0.1), 10);
-      
+
       // Zoom toward mouse position
       const scale = newZoom / zoom;
       const newPanX = mouseX - (mouseX - pan.x) * scale;
       const newPanY = mouseY - (mouseY - pan.y) * scale;
-      
+
       setZoom(newZoom);
       setPan({ x: newPanX, y: newPanY });
     };
-    
+
     canvas.addEventListener('wheel', handleWheel, { passive: false });
 
     return () => {
@@ -139,14 +139,14 @@ export default function AppCanvas() {
     renderer.setTransform(zoom, pan.x, pan.y);
     renderer.clear(canvasSize.width, canvasSize.height);
     renderer.drawGrid(canvasSize.width, canvasSize.height);
-    
+
     if (snapTarget && isDrawing) {
       renderer.drawSnapIndicator(snapTarget);
     }
-    
+
     // Create modified elements array if dragging a point or drawing with temp points
     let renderElements = elements;
-    
+
     // If dragging a point with select tool, show temp position
     if (draggedPointId && draggedPointPos) {
       renderElements = elements.map(el => {
@@ -156,7 +156,7 @@ export default function AppCanvas() {
         return el;
       });
     }
-    
+
     // If drawing a line or circle, add temp first point to render
     if (isDrawing && tempData) {
       const tempPoint = (tempData.p1 || tempData.center) as Point | undefined;
@@ -164,9 +164,9 @@ export default function AppCanvas() {
         renderElements = [...renderElements, tempPoint];
       }
     }
-    
+
     renderer.render(renderElements, null, store.hoveredElementId, tempData?.selectedLine?.id || null);
-    
+
     // Render preview intersections if in intersect tool mode
     if (selectedTool === 'intersect' && previewIntersections.length > 0) {
       previewIntersections.forEach((intersection, index) => {
@@ -184,7 +184,7 @@ export default function AppCanvas() {
     const rect = canvas.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
-    
+
     // Handle panning
     if (isPanning && lastMousePosRef.current) {
       const dx = e.clientX - lastMousePosRef.current.x;
@@ -195,7 +195,7 @@ export default function AppCanvas() {
       }));
     }
     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-    
+
     // Convert screen coordinates to world coordinates
     const worldX = (screenX - pan.x) / zoom;
     const worldY = (screenY - pan.y) / zoom;
@@ -212,30 +212,38 @@ export default function AppCanvas() {
     const points = elements.filter(el => el.type === 'point') as Point[];
     const snap = findSnapTarget({ x: worldX, y: worldY }, points);
     setSnapTarget(snap);
-    
+
     // Update hovered element for highlighting
     if (selectedTool === 'intersect' || selectedTool === 'select') {
       const hoveredEl = findClickedElement({ x: worldX, y: worldY });
       store.setHoveredElementId(hoveredEl?.id || null);
-      
+
       // In intersect mode, show ALL intersections between hovered element and all other elements
       if (selectedTool === 'intersect' && hoveredEl && hoveredEl.type !== 'point') {
         const pointsMap = new Map<string, Point>();
         elements.forEach(el => {
           if (el.type === 'point') pointsMap.set(el.id, el);
         });
-        
+
         // Find all intersections with other elements
-        const allIntersections: IntersectionPoint[] = [];
+        const allIntersections: { x: number; y: number; parent1Id: string; parent2Id: string; index: number }[] = [];
         elements.forEach(el => {
           if (el.type !== 'point' && el.id !== hoveredEl.id) {
             const ints = findIntersections(hoveredEl, el, pointsMap, elements);
-            allIntersections.push(...ints);
+            ints.forEach((int, idx) => {
+              allIntersections.push({
+                x: int.x,
+                y: int.y,
+                parent1Id: hoveredEl.id,
+                parent2Id: el.id,
+                index: idx
+              });
+            });
           }
         });
-        
+
         setPreviewIntersections(allIntersections);
-        
+
         // Find which intersection is closest to mouse
         if (allIntersections.length > 0) {
           let closestIndex = 0;
@@ -295,7 +303,7 @@ export default function AppCanvas() {
   // Find which geometric element (line or circle) is clicked
   const findClickedElement = (mouse: Vec2): GeoElement | null => {
     const threshold = 10 / zoom; // Click threshold in world space
-    
+
     // Check circles first
     for (const el of elements) {
       if (el.type === 'circle') {
@@ -310,7 +318,7 @@ export default function AppCanvas() {
         }
       }
     }
-    
+
     // Check perpendicular bisectors
     for (const el of elements) {
       if (el.type === 'perpendicular_bisector') {
@@ -320,22 +328,22 @@ export default function AppCanvas() {
           // Calculate midpoint
           const bisectMidX = (p1.x + p2.x) / 2;
           const bisectMidY = (p1.y + p2.y) / 2;
-          
+
           // Direction of segment line
           const dx = p2.x - p1.x;
           const dy = p2.y - p1.y;
           const len = Math.hypot(dx, dy);
           if (len < 1e-8) continue;
-          
+
           // Perpendicular direction (rotated 90 degrees)
           const perpX = -dy / len;
           const perpY = dx / len;
-          
+
           // Distance from mouse to perpendicular bisector line (infinite line through midpoint)
           // Using point-to-line distance formula: |ax + by + c| / sqrt(a^2 + b^2)
           // Line equation: perpY * (x - midX) - perpX * (y - midY) = 0
           const distToBisector = Math.abs(perpY * (mouse.x - bisectMidX) - perpX * (mouse.y - bisectMidY));
-          
+
           if (distToBisector < threshold) {
             return el;
           }
@@ -348,14 +356,14 @@ export default function AppCanvas() {
       if (el.type === 'perpendicular_line') {
         const point = elements.find(e => e.id === el.pointId) as Point;
         if (!point) continue;
-        
+
         // Get the reference geometry (line, perpendicular_bisector, or angle_bisector)
         const refEl = elements.find(e => e.id === el.referenceLineId);
         if (!refEl) continue;
-        
+
         let refP1: Point | undefined;
         let refP2: Point | undefined;
-        
+
         // Extract two points from reference geometry
         if (refEl.type === 'line' || refEl.type === 'perpendicular_bisector') {
           refP1 = elements.find(e => e.id === refEl.p1Id) as Point;
@@ -370,14 +378,14 @@ export default function AppCanvas() {
             refP2 = elements.find(e => e.id === refRefEl.p2Id) as Point;
           }
         }
-        
+
         if (refP1 && refP2) {
           // Get perpendicular direction from reference line
           let refDx = refP2.x - refP1.x;
           let refDy = refP2.y - refP1.y;
           let refLen = Math.hypot(refDx, refDy);
           if (refLen < 1e-8) continue;
-          
+
           // For perpendicular bisectors, the direction is perpendicular to the segment
           if (refEl.type === 'perpendicular_bisector') {
             const segDx = refDx;
@@ -462,22 +470,22 @@ export default function AppCanvas() {
               }
             }
           }
-          
+
           // Perpendicular direction (rotated 90 degrees)
           const perpX = -refDy / refLen;
           const perpY = refDx / refLen;
-          
+
           // Distance from mouse to perpendicular line (infinite line through point)
           // Line equation: perpY * (x - pointX) - perpX * (y - pointY) = 0
           const distToPerpLine = Math.abs(perpY * (mouse.x - point.x) - perpX * (mouse.y - point.y));
-          
+
           if (distToPerpLine < threshold) {
             return el;
           }
         }
       }
     }
-    
+
     // Check angle bisectors
     for (const el of elements) {
       if (el.type === 'angle_bisector') {
@@ -525,7 +533,7 @@ export default function AppCanvas() {
         }
       }
     }
-    
+
     // Check lines
     for (const el of elements) {
       if (el.type === 'line') {
@@ -537,17 +545,17 @@ export default function AppCanvas() {
           const dy = p2.y - p1.y;
           const len2 = dx * dx + dy * dy;
           if (len2 === 0) continue;
-          
+
           // For lines, check the infinite extension (distance from point to infinite line)
           const distToInfiniteLine = Math.abs((dy * mouse.x - dx * mouse.y + p2.x * p1.y - p2.y * p1.x) / Math.sqrt(len2));
-          
+
           if (distToInfiniteLine < threshold) {
             return el;
           }
         }
       }
     }
-    
+
     return null;
   };
 
@@ -567,7 +575,7 @@ export default function AppCanvas() {
       setIsPanning(true);
       return;
     }
-    
+
     // Handle select/move tool
     if (selectedTool === 'select') {
       // First, try to find a clicked point to drag
@@ -580,7 +588,7 @@ export default function AppCanvas() {
         store.setSelectedElementId(clickedPoint.id);
         return;
       }
-      
+
       // If no point, try to select any element (line, circle, perpendicular_bisector, etc.)
       const clickedElement = findClickedElement(mousePos);
       if (clickedElement) {
@@ -591,13 +599,13 @@ export default function AppCanvas() {
       // Allow panning (handled by right-click above)
       return;
     }
-    
+
     // Handle intersection tool
     if (selectedTool === 'intersect') {
       // If user clicked near a preview intersection, create a permanent point there
       if (previewIntersections.length > 0 && hoveredIntersectionIndex !== null) {
         const intersection = previewIntersections[hoveredIntersectionIndex];
-        
+
         // Check for existing point at intersection
         const existing = findExistingPoint(intersection.x, intersection.y, 1.5 / zoom);
         if (!existing) {
@@ -607,7 +615,9 @@ export default function AppCanvas() {
             type: 'point',
             x: intersection.x,
             y: intersection.y,
-            isFixed: false // intersection points are derived, not fixed
+            isFixed: false, // intersection points are derived, not fixed
+            dependencies: [intersection.parent1Id, intersection.parent2Id],
+            intersectionIndex: intersection.index
           };
           store.addElement(point);
         }
@@ -615,7 +625,7 @@ export default function AppCanvas() {
       }
       return;
     }
-    
+
     // Use snapped position if available, otherwise use exact mouse position (rounded)
     const pos = snapTarget || {
       x: Math.round(mousePos.x * 100) / 100,
@@ -629,7 +639,7 @@ export default function AppCanvas() {
         // Don't create duplicate - point already exists
         return;
       }
-      
+
       const point: Point = {
         id: generateId(),
         type: 'point',
@@ -643,7 +653,7 @@ export default function AppCanvas() {
         // Check for existing point, or create new one
         let startPoint = findExistingPoint(pos.x, pos.y, 2 / zoom);
         const isNewPoint = !startPoint;
-        
+
         if (!startPoint) {
           startPoint = {
             id: generateId(),
@@ -653,12 +663,12 @@ export default function AppCanvas() {
             isFixed: true
           };
         }
-        
+
         // Store point in tempData, don't add to elements yet
-        store.startConstruction({ 
-          p1Id: startPoint.id, 
+        store.startConstruction({
+          p1Id: startPoint.id,
           p1: startPoint,
-          p1IsNew: isNewPoint 
+          p1IsNew: isNewPoint
         });
       } else {
         // Check for existing point, or create new one
@@ -666,7 +676,7 @@ export default function AppCanvas() {
         const p1 = tempData.p1 as Point;
         const p1IsNew = tempData.p1IsNew as boolean;
         const isNewEndPoint = !endPoint;
-        
+
         if (!endPoint) {
           endPoint = {
             id: generateId(),
@@ -676,18 +686,18 @@ export default function AppCanvas() {
             isFixed: true
           };
         }
-        
+
         if (p1) {
           // Collect all new elements to add in one batch (single undo entry)
           const elementsToAdd: GeoElement[] = [];
-          
+
           if (p1IsNew) {
             elementsToAdd.push(p1);
           }
           if (isNewEndPoint) {
             elementsToAdd.push(endPoint);
           }
-          
+
           const line: Line = {
             id: generateId(),
             type: 'line',
@@ -696,7 +706,7 @@ export default function AppCanvas() {
             infinite: false
           };
           elementsToAdd.push(line);
-          
+
           // Add all elements at once - creates single undo entry
           store.addElements(elementsToAdd);
         }
@@ -707,7 +717,7 @@ export default function AppCanvas() {
         // Check for existing point, or create new one
         let centerPoint = findExistingPoint(pos.x, pos.y, 2 / zoom);
         const isNewPoint = !centerPoint;
-        
+
         if (!centerPoint) {
           centerPoint = {
             id: generateId(),
@@ -717,9 +727,9 @@ export default function AppCanvas() {
             isFixed: true
           };
         }
-        
+
         // Store point in tempData, don't add to elements yet
-        store.startConstruction({ 
+        store.startConstruction({
           centerId: centerPoint.id,
           center: centerPoint,
           centerIsNew: isNewPoint
@@ -730,7 +740,7 @@ export default function AppCanvas() {
         const center = tempData.center as Point;
         const centerIsNew = tempData.centerIsNew as boolean;
         const isNewRadiusPoint = !radiusPoint;
-        
+
         if (!radiusPoint) {
           radiusPoint = {
             id: generateId(),
@@ -740,18 +750,18 @@ export default function AppCanvas() {
             isFixed: true
           };
         }
-        
+
         if (center) {
           // Collect all new elements to add in one batch (single undo entry)
           const elementsToAdd: GeoElement[] = [];
-          
+
           if (centerIsNew) {
             elementsToAdd.push(center);
           }
           if (isNewRadiusPoint) {
             elementsToAdd.push(radiusPoint);
           }
-          
+
           const circle: Circle = {
             id: generateId(),
             type: 'circle',
@@ -759,7 +769,7 @@ export default function AppCanvas() {
             radiusPointId: radiusPoint.id
           };
           elementsToAdd.push(circle);
-          
+
           // Add all elements at once - creates single undo entry
           store.addElements(elementsToAdd);
         }
@@ -779,23 +789,23 @@ export default function AppCanvas() {
       setIsPanning(false);
       lastMousePosRef.current = null;
     }
-    
+
     // Stop dragging and commit final position (only one undo entry)
     if (selectedTool === 'select' && draggedPointId && draggedPointPos && dragOriginalPos) {
       // Only update if the point actually moved
       const moved = Math.hypot(
-        draggedPointPos.x - dragOriginalPos.x, 
+        draggedPointPos.x - dragOriginalPos.x,
         draggedPointPos.y - dragOriginalPos.y
       ) > 0.01;
-      
+
       if (moved) {
         // Single update to store - creates one undo entry
-        store.updateElement(draggedPointId, { 
-          x: draggedPointPos.x, 
-          y: draggedPointPos.y 
+        store.updateElement(draggedPointId, {
+          x: draggedPointPos.x,
+          y: draggedPointPos.y
         });
       }
-      
+
       setDraggedPointId(null);
       setDraggedPointPos(null);
       setDragOriginalPos(null);
