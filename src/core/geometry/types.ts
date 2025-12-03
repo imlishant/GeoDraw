@@ -3,50 +3,51 @@ export interface Vec2 {
   y: number;
 }
 
-export interface Point {
+export interface BaseElement {
   id: string;
+  type: string;
+  dependencies?: string[]; // IDs of elements this element depends on
+  label?: string;
+}
+
+export interface Point extends BaseElement {
   type: 'point';
   x: number;
   y: number;
   isFixed: boolean; // true = user placed, false = intersection/derived
-  label?: string; // Optional label (A-Z)
+  intersectionIndex?: number; // If derived from intersection, which one? (0 or 1)
 }
 
-export interface Line {
-  id: string;
+export interface Line extends BaseElement {
   type: 'line';
   p1Id: string;
   p2Id: string;
   infinite: boolean;
 }
 
-export interface Circle {
-  id: string;
+export interface Circle extends BaseElement {
   type: 'circle';
   centerId: string;
   radiusPointId: string; // Point that defines radius
 }
 
-export interface PerpendicularBisector {
-  id: string;
+export interface PerpendicularBisector extends BaseElement {
   type: 'perpendicular_bisector';
   p1Id: string;  // First point
   p2Id: string;  // Second point
 }
 
-export interface PerpendicularLine {
-  id: string;
+export interface PerpendicularLine extends BaseElement {
   type: 'perpendicular_line';
   pointId: string;      // Point the line passes through
-  referenceLineId: string;  // Line to be perpendicular to (could be line, bisector, etc.)
+  referenceLineId: string;  // Line to be perpendicular to
 }
 
-export interface AngleBisector {
-  id: string;
+export interface AngleBisector extends BaseElement {
   type: 'angle_bisector';
   vertexId: string;  // Vertex of the angle
-  p1Id: string;      // First point on one ray (or on the ray from vertex)
-  p2Id: string;      // Second point on other ray (or on the other ray from vertex)
+  p1Id: string;      // First point on one ray
+  p2Id: string;      // Second point on other ray
 }
 
 export type GeoElement = Point | Line | Circle | PerpendicularBisector | PerpendicularLine | AngleBisector;

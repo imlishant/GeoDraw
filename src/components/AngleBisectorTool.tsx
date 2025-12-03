@@ -69,7 +69,7 @@ export function handleAngleBisectorClick(
       return (
         el.vertexId === vertex.id &&
         ((el.p1Id === p1.id && el.p2Id === closestPoint.id) ||
-         (el.p1Id === closestPoint.id && el.p2Id === p1.id))
+          (el.p1Id === closestPoint.id && el.p2Id === p1.id))
       );
     });
 
@@ -111,7 +111,8 @@ export function handleAngleBisectorClick(
       type: 'angle_bisector',
       vertexId: vertex.id,
       p1Id: p1.id,
-      p2Id: closestPoint.id
+      p2Id: closestPoint.id,
+      dependencies: [vertex.id, p1.id, closestPoint.id]
     };
 
     store.addElement(bisector);

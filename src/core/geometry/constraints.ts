@@ -1,5 +1,5 @@
-import type { Point, Line, Circle, GeoElement } from './types';
-import { isPointOnLine, distance, EPSILON } from './utils';
+import type { GeoElement } from './types';
+// import { isPointOnLine, distance, EPSILON } from './utils';
 
 // Euclidea-style validation: ensure constructions are geometrically precise
 export class ConstraintValidator {
@@ -18,7 +18,7 @@ export class ConstraintValidator {
   }
 
   // Check if point lies on existing geometry (for intersection points)
-  static validatePointOnGeometry(x: number, y: number, elements: GeoElement[]): boolean {
+  static validatePointOnGeometry(_x: number, _y: number, _elements: GeoElement[]): boolean {
     // For MVP: allow points anywhere (Euclidea restricts this)
     // In future: check if point is on line/circle intersection
     return true;

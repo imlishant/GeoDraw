@@ -238,10 +238,10 @@ export function handlePerpendicularLineClick(
             // Perpendicular direction (the actual bisector line)
             const perpX = -dy / len;
             const perpY = dx / len;
-            
+
             // Distance from click to the infinite bisector line through midpoint
             const dist = Math.abs(perpY * (worldX - bisectMidX) - perpX * (worldY - bisectMidY));
-            
+
             // Select if click is close enough to the perpendicular bisector line
             if (dist < lineThreshold && dist < minLineDist) {
               closestLine = el;
@@ -296,7 +296,8 @@ export function handlePerpendicularLineClick(
       id: generateId(),
       type: 'perpendicular_line' as const,
       pointId: selectedPoint.id,
-      referenceLineId: closestLine.id
+      referenceLineId: closestLine.id,
+      dependencies: [selectedPoint.id, closestLine.id]
     };
 
     store.addElement(perpLine);
@@ -321,7 +322,8 @@ export function handlePerpendicularLineClick(
       id: generateId(),
       type: 'perpendicular_line' as const,
       pointId: closestPoint.id,
-      referenceLineId: selectedLine.id
+      referenceLineId: selectedLine.id,
+      dependencies: [closestPoint.id, selectedLine.id]
     };
 
     store.addElement(perpLine);
