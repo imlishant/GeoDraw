@@ -1,5 +1,5 @@
 import type { Point, GeoElement, Line, PerpendicularBisector, PerpendicularLine, AngleBisector } from '../core/geometry/types';
-import { generateId } from '../core/geometry/utils';
+import { generateId, getElementDirection } from '../core/geometry/utils';
 import type { GeometryState } from '../store/useGeometryStore';
 
 /**
@@ -45,223 +45,43 @@ export function handlePerpendicularLineClick(
 
   for (const el of elements) {
     if (el.type === 'line' || el.type === 'perpendicular_bisector' || el.type === 'perpendicular_line' || el.type === 'angle_bisector') {
-      let p1: Point | undefined;
-      let p2: Point | undefined;
+      // Create a map for the helper
+      const elementsMap = new Map(elements.map(e => [e.id, e]));
+      const dir = getElementDirection(el.id, elementsMap);
 
+      if (!dir) continue;
+
+      // Get a point on the line to calculate distance
+      let linePoint: Point | undefined;
       if (el.type === 'line') {
-        p1 = elements.find(e => e.id === el.p1Id) as Point | undefined;
-        p2 = elements.find(e => e.id === el.p2Id) as Point | undefined;
+        linePoint = elements.find(e => e.id === el.p1Id) as Point;
       } else if (el.type === 'perpendicular_bisector') {
-        p1 = elements.find(e => e.id === el.p1Id) as Point | undefined;
-        p2 = elements.find(e => e.id === el.p2Id) as Point | undefined;
-      } else if (el.type === 'perpendicular_line') {
-        // For perpendicular lines, get the point and compute direction from reference line
-        const point = elements.find(e => e.id === el.pointId) as Point | undefined;
-        if (!point) continue;
-
-        // Get the reference geometry (line or perpendicular_bisector)
-        const refEl = elements.find(e => e.id === el.referenceLineId);
-        if (!refEl) continue;
-
-        let refP1: Point | undefined;
-        let refP2: Point | undefined;
-
-        if (refEl.type === 'line' || refEl.type === 'perpendicular_bisector') {
-          refP1 = elements.find(e => e.id === refEl.p1Id) as Point | undefined;
-          refP2 = elements.find(e => e.id === refEl.p2Id) as Point | undefined;
-        } else if (refEl.type === 'perpendicular_line') {
-          const refRefEl = elements.find(e => e.id === refEl.referenceLineId);
-          if (refRefEl && (refRefEl.type === 'line' || refRefEl.type === 'perpendicular_bisector' || refRefEl.type === 'angle_bisector')) {
-            refP1 = elements.find(e => e.id === refRefEl.p1Id) as Point | undefined;
-            refP2 = elements.find(e => e.id === refRefEl.p2Id) as Point | undefined;
-          }
-        } else if (refEl.type === 'angle_bisector') {
-          refP1 = elements.find(e => e.id === refEl.p1Id) as Point | undefined;
-          refP2 = elements.find(e => e.id === refEl.p2Id) as Point | undefined;
+        const p1 = elements.find(e => e.id === el.p1Id) as Point;
+        const p2 = elements.find(e => e.id === el.p2Id) as Point;
+        if (p1 && p2) {
+          linePoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2, id: 'mid', type: 'point', isFixed: false };
         }
-
-        if (refP1 && refP2) {
-          // Get direction from reference line
-          let refDx = refP2.x - refP1.x;
-          let refDy = refP2.y - refP1.y;
-          let refLen = Math.hypot(refDx, refDy);
-          if (refLen < 1e-8) continue;
-
-          // For perpendicular bisectors, the direction is perpendicular to the segment
-          if (refEl.type === 'perpendicular_bisector') {
-            const segDx = refDx;
-            const segDy = refDy;
-            refDx = -segDy;
-            refDy = segDx;
-            refLen = Math.hypot(refDx, refDy);
-          } else if (refEl.type === 'angle_bisector') {
-            // For angle bisector, compute direction from vertex and two rays
-            const vertex = elements.find(e => e.id === refEl.vertexId) as Point | undefined;
-            if (!vertex) continue;
-
-            let ray1X = refP1.x - vertex.x;
-            let ray1Y = refP1.y - vertex.y;
-            const ray1Len = Math.hypot(ray1X, ray1Y);
-            if (ray1Len < 1e-8) continue;
-            ray1X /= ray1Len;
-            ray1Y /= ray1Len;
-
-            let ray2X = refP2.x - vertex.x;
-            let ray2Y = refP2.y - vertex.y;
-            const ray2Len = Math.hypot(ray2X, ray2Y);
-            if (ray2Len < 1e-8) continue;
-            ray2X /= ray2Len;
-            ray2Y /= ray2Len;
-
-            // Bisector direction is the average of the two normalized rays
-            refDx = (ray1X + ray2X) / 2;
-            refDy = (ray1Y + ray2Y) / 2;
-            refLen = Math.hypot(refDx, refDy);
-            if (refLen < 1e-8) continue;
-          } else if (refEl.type === 'perpendicular_line') {
-            // Handle nested perpendicular line - need to get the base reference element direction
-            const refRefEl = elements.find(e => e.id === refEl.referenceLineId);
-            if (refRefEl && (refRefEl.type === 'line' || refRefEl.type === 'perpendicular_bisector' || refRefEl.type === 'angle_bisector')) {
-              const refRefP1 = elements.find(e => e.id === refRefEl.p1Id) as Point | undefined;
-              const refRefP2 = elements.find(e => e.id === refRefEl.p2Id) as Point | undefined;
-              if (refRefP1 && refRefP2) {
-                let refRefDx = refRefP2.x - refRefP1.x;
-                let refRefDy = refRefP2.y - refRefP1.y;
-                const refRefLen = Math.hypot(refRefDx, refRefDy);
-                if (refRefLen > 1e-8) {
-                  // If perpendicular bisector, rotate to get bisector direction
-                  if (refRefEl.type === 'perpendicular_bisector') {
-                    const segDx = refRefDx;
-                    const segDy = refRefDy;
-                    refRefDx = -segDy;
-                    refRefDy = segDx;
-                  } else if (refRefEl.type === 'angle_bisector') {
-                    const vertex = elements.find(e => e.id === refRefEl.vertexId) as Point | undefined;
-                    if (vertex) {
-                      let ray1X = refRefP1.x - vertex.x;
-                      let ray1Y = refRefP1.y - vertex.y;
-                      const ray1Len = Math.hypot(ray1X, ray1Y);
-                      if (ray1Len > 1e-8) {
-                        ray1X /= ray1Len;
-                        ray1Y /= ray1Len;
-                      }
-
-                      let ray2X = refRefP2.x - vertex.x;
-                      let ray2Y = refRefP2.y - vertex.y;
-                      const ray2Len = Math.hypot(ray2X, ray2Y);
-                      if (ray2Len > 1e-8) {
-                        ray2X /= ray2Len;
-                        ray2Y /= ray2Len;
-                      }
-
-                      refRefDx = (ray1X + ray2X) / 2;
-                      refRefDy = (ray1Y + ray2Y) / 2;
-                      const bisLen = Math.hypot(refRefDx, refRefDy);
-                      if (bisLen > 1e-8) {
-                        refRefDx /= bisLen;
-                        refRefDy /= bisLen;
-                      }
-                    }
-                  }
-                  // The perpendicular to the perpendicular is the original direction
-                  refDx = -refRefDy;
-                  refDy = refRefDx;
-                  refLen = Math.hypot(refDx, refDy);
-                }
-              }
-            }
-          }
-
-          // Perpendicular direction (rotated 90 degrees)
-          const perpX = -refDy / refLen;
-          const perpY = refDx / refLen;
-
-          // Distance from mouse to perpendicular line (infinite line through point)
-          const dist = Math.abs(perpY * (worldX - point.x) - perpX * (worldY - point.y));
-
-          if (dist < lineThreshold && dist < minLineDist) {
-            closestLine = el;
-            minLineDist = dist;
-          }
-        }
-        continue;
       } else if (el.type === 'angle_bisector') {
-        // For angle bisectors, get the vertex and compute direction from the two rays
-        const vertex = elements.find(e => e.id === el.vertexId) as Point | undefined;
-        const p1 = elements.find(e => e.id === el.p1Id) as Point | undefined;
-        const p2 = elements.find(e => e.id === el.p2Id) as Point | undefined;
-
-        if (!vertex || !p1 || !p2) continue;
-
-        // Get rays from vertex to p1 and p2
-        let ray1X = p1.x - vertex.x;
-        let ray1Y = p1.y - vertex.y;
-        const ray1Len = Math.hypot(ray1X, ray1Y);
-        if (ray1Len < 1e-8) continue;
-        ray1X /= ray1Len;
-        ray1Y /= ray1Len;
-
-        let ray2X = p2.x - vertex.x;
-        let ray2Y = p2.y - vertex.y;
-        const ray2Len = Math.hypot(ray2X, ray2Y);
-        if (ray2Len < 1e-8) continue;
-        ray2X /= ray2Len;
-        ray2Y /= ray2Len;
-
-        // Bisector direction is the average of the two normalized rays
-        let bisectDx = (ray1X + ray2X) / 2;
-        let bisectDy = (ray1Y + ray2Y) / 2;
-        const bisectLen = Math.hypot(bisectDx, bisectDy);
-        if (bisectLen < 1e-8) continue;
-        bisectDx /= bisectLen;
-        bisectDy /= bisectLen;
-
-        // Distance from mouse to the bisector line (infinite line through vertex)
-        const dist = Math.abs(bisectDy * (worldX - vertex.x) - bisectDx * (worldY - vertex.y));
-
-        if (dist < lineThreshold && dist < minLineDist) {
-          closestLine = el;
-          minLineDist = dist;
-        }
-        continue;
+        linePoint = elements.find(e => e.id === el.vertexId) as Point;
+      } else if (el.type === 'perpendicular_line') {
+        linePoint = elements.find(e => e.id === el.pointId) as Point;
       }
 
-      if (p1 && p2) {
-        // For perpendicular bisector, ONLY detect the perpendicular bisector line, NOT the segment
-        if (el.type === 'perpendicular_bisector') {
-          const bisectMidX = (p1.x + p2.x) / 2;
-          const bisectMidY = (p1.y + p2.y) / 2;
-          const dx = p2.x - p1.x;
-          const dy = p2.y - p1.y;
-          const len = Math.hypot(dx, dy);
-          if (len > 1e-8) {
-            // Perpendicular direction (the actual bisector line)
-            const perpX = -dy / len;
-            const perpY = dx / len;
+      if (!linePoint) continue;
 
-            // Distance from click to the infinite bisector line through midpoint
-            const dist = Math.abs(perpY * (worldX - bisectMidX) - perpX * (worldY - bisectMidY));
+      // Distance from mouse to line defined by linePoint and dir
+      // Line equation: (y - y0) * dx - (x - x0) * dy = 0
+      // Distance = |(y - y0) * dx - (x - x0) * dy| / sqrt(dx^2 + dy^2)
+      // Since dir is normalized, denominator is 1.
+      // Normal vector is (-dir.y, dir.x)
 
-            // Select if click is close enough to the perpendicular bisector line
-            if (dist < lineThreshold && dist < minLineDist) {
-              closestLine = el;
-              minLineDist = dist;
-            }
-          }
-        } else {
-          // For regular lines, detect the infinite line
-          const dx = p2.x - p1.x;
-          const dy = p2.y - p1.y;
-          const len2 = dx * dx + dy * dy;
-          if (len2 > 0) {
-            const dist = Math.abs((dy * worldX - dx * worldY + p2.x * p1.y - p2.y * p1.x) / Math.sqrt(len2));
-            if (dist < lineThreshold && dist < minLineDist) {
-              closestLine = el;
-              minLineDist = dist;
-            }
-          }
-        }
+      const dist = Math.abs(-dir.y * (worldX - linePoint.x) + dir.x * (worldY - linePoint.y));
+
+      if (dist < lineThreshold && dist < minLineDist) {
+        closestLine = el;
+        minLineDist = dist;
       }
+      continue;
     }
   }
 
@@ -281,7 +101,7 @@ export function handlePerpendicularLineClick(
 
   // Case 1: First was a point, now selecting a line
   if (selectedPoint && closestLine && !selectedLine) {
-    // Check if perpendicular line already exists
+    // Check if perpendicular line already exists (exact match)
     const perpLineExists = elements.some(el => {
       if (el.type !== 'perpendicular_line') return false;
       return el.pointId === selectedPoint.id && el.referenceLineId === closestLine!.id;
@@ -290,6 +110,59 @@ export function handlePerpendicularLineClick(
     if (perpLineExists) {
       store.completeConstruction();
       return;
+    }
+
+    // Check for geometric coincidence (visually identical line)
+    // 1. Calculate direction of the new perpendicular line
+    const elementsMap = new Map(elements.map(e => [e.id, e]));
+    const refDir = getElementDirection(closestLine.id, elementsMap);
+
+    if (refDir) {
+      // New line direction is perpendicular to reference
+      const newDir = { x: -refDir.y, y: refDir.x };
+
+      // 2. Check against all other linear elements
+      const isCoincident = elements.some(el => {
+        if (el.type !== 'line' && el.type !== 'perpendicular_bisector' && el.type !== 'perpendicular_line' && el.type !== 'angle_bisector') return false;
+
+        const elDir = getElementDirection(el.id, elementsMap);
+        if (!elDir) return false;
+
+        // Check if parallel (dot product close to 1 or -1)
+        const dot = newDir.x * elDir.x + newDir.y * elDir.y;
+        if (Math.abs(Math.abs(dot) - 1) > 1e-6) return false;
+
+        // Check if point lies on the element's infinite line
+        // We know the new line passes through selectedPoint.
+        // If selectedPoint also lies on 'el', and they are parallel, they are coincident.
+
+        // Get a point on 'el'
+        let pOnEl: Point | undefined;
+        if (el.type === 'line') {
+          pOnEl = elements.find(e => e.id === el.p1Id) as Point;
+        } else if (el.type === 'perpendicular_bisector') {
+          const p1 = elements.find(e => e.id === el.p1Id) as Point;
+          const p2 = elements.find(e => e.id === el.p2Id) as Point;
+          if (p1 && p2) pOnEl = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2, id: 'mid', type: 'point', isFixed: false };
+        } else if (el.type === 'angle_bisector') {
+          pOnEl = elements.find(e => e.id === el.vertexId) as Point;
+        } else if (el.type === 'perpendicular_line') {
+          pOnEl = elements.find(e => e.id === el.pointId) as Point;
+        }
+
+        if (!pOnEl) return false;
+
+        // Distance from selectedPoint to line 'el'
+        // Normal vector to el is (-elDir.y, elDir.x)
+        const dist = Math.abs(-elDir.y * (selectedPoint.x - pOnEl.x) + elDir.x * (selectedPoint.y - pOnEl.y));
+
+        return dist < 1e-4; // Epsilon for coincidence
+      });
+
+      if (isCoincident) {
+        store.completeConstruction();
+        return;
+      }
     }
 
     const perpLine = {
@@ -307,7 +180,7 @@ export function handlePerpendicularLineClick(
 
   // Case 2: First was a line, now selecting a point
   if (selectedLine && closestPoint && !selectedPoint) {
-    // Check if perpendicular line already exists
+    // Check if perpendicular line already exists (exact match)
     const perpLineExists = elements.some(el => {
       if (el.type !== 'perpendicular_line') return false;
       return el.pointId === closestPoint.id && el.referenceLineId === selectedLine.id;
@@ -316,6 +189,47 @@ export function handlePerpendicularLineClick(
     if (perpLineExists) {
       store.completeConstruction();
       return;
+    }
+
+    // Check for geometric coincidence (visually identical line)
+    const elementsMap = new Map(elements.map(e => [e.id, e]));
+    const refDir = getElementDirection(selectedLine.id, elementsMap);
+
+    if (refDir) {
+      const newDir = { x: -refDir.y, y: refDir.x };
+
+      const isCoincident = elements.some(el => {
+        if (el.type !== 'line' && el.type !== 'perpendicular_bisector' && el.type !== 'perpendicular_line' && el.type !== 'angle_bisector') return false;
+
+        const elDir = getElementDirection(el.id, elementsMap);
+        if (!elDir) return false;
+
+        const dot = newDir.x * elDir.x + newDir.y * elDir.y;
+        if (Math.abs(Math.abs(dot) - 1) > 1e-6) return false;
+
+        let pOnEl: Point | undefined;
+        if (el.type === 'line') {
+          pOnEl = elements.find(e => e.id === el.p1Id) as Point;
+        } else if (el.type === 'perpendicular_bisector') {
+          const p1 = elements.find(e => e.id === el.p1Id) as Point;
+          const p2 = elements.find(e => e.id === el.p2Id) as Point;
+          if (p1 && p2) pOnEl = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2, id: 'mid', type: 'point', isFixed: false };
+        } else if (el.type === 'angle_bisector') {
+          pOnEl = elements.find(e => e.id === el.vertexId) as Point;
+        } else if (el.type === 'perpendicular_line') {
+          pOnEl = elements.find(e => e.id === el.pointId) as Point;
+        }
+
+        if (!pOnEl) return false;
+
+        const dist = Math.abs(-elDir.y * (closestPoint.x - pOnEl.x) + elDir.x * (closestPoint.y - pOnEl.y));
+        return dist < 1e-4;
+      });
+
+      if (isCoincident) {
+        store.completeConstruction();
+        return;
+      }
     }
 
     const perpLine = {

@@ -1,5 +1,5 @@
 import type { GeoElement, Point, Line, Circle, PerpendicularBisector, PerpendicularLine, AngleBisector } from '../geometry/types';
-import { distance } from '../geometry/utils';
+import { distance, getElementDirection } from '../geometry/utils';
 
 const THEME = {
   light: {
@@ -41,10 +41,10 @@ export class CanvasRenderer {
     this.ctx = context;
     this.ctx.lineCap = 'round';
     this.ctx.lineJoin = 'round';
-    
+
     // Detect dark mode
-    this.theme = document.documentElement.classList.contains('dark') 
-      ? THEME.dark 
+    this.theme = document.documentElement.classList.contains('dark')
+      ? THEME.dark
       : THEME.light;
   }
 
@@ -130,15 +130,15 @@ export class CanvasRenderer {
         // Font size is constant (not scaled by zoom)
         const fontSize = 18 / this.transform.zoom;
         const subscriptFontSize = 12 / this.transform.zoom;
-        
+
         // Theme-adaptive label color: blue for light, orange for dark
         const isDark = document.documentElement.classList.contains('dark');
         const labelColor = isDark ? '#ffb347' : '#1a4fff';
         const outlineColor = isDark ? '#222' : '#fff';
-        
+
         // Slightly smaller gap for better appearance
         const gap = radius + 1 / this.transform.zoom;
-        
+
         // Draw main label with outline
         this.ctx.font = `bold ${fontSize}px 'Fira Mono', 'Menlo', 'Consolas', monospace`;
         this.ctx.textAlign = 'left';
@@ -146,16 +146,16 @@ export class CanvasRenderer {
         this.ctx.fillStyle = labelColor;
         this.ctx.strokeStyle = outlineColor;
         this.ctx.lineWidth = 2.5 / this.transform.zoom;
-        
+
         // Get text width to position subscript
         const metrics = this.ctx.measureText(mainLabel);
         const textWidth = metrics.width;
-        
+
         // Draw outline for main label
         this.ctx.strokeText(mainLabel, point.x - textWidth / 2, point.y - gap);
         // Draw main label
         this.ctx.fillText(mainLabel, point.x - textWidth / 2, point.y - gap);
-        
+
         // Draw subscript if present
         if (subscript) {
           this.ctx.font = `bold ${subscriptFontSize}px 'Fira Mono', 'Menlo', 'Consolas', monospace`;
@@ -163,7 +163,7 @@ export class CanvasRenderer {
           // Position subscript directly adjacent to main label (minimal gap)
           const subscriptX = point.x - textWidth / 2 + textWidth + 0.5 / this.transform.zoom;
           const subscriptY = point.y - gap - 9 / this.transform.zoom;
-          
+
           // Draw outline for subscript
           this.ctx.strokeText(subscript, subscriptX, subscriptY);
           // Draw subscript
@@ -191,7 +191,7 @@ export class CanvasRenderer {
       this.ctx.lineWidth = 1.5 / this.transform.zoom;
     }
     this.ctx.setLineDash([]);
-    
+
     // Calculate intersection with canvas bounds
     const { width, height } = this.ctx.canvas;
     // Direction vector
@@ -290,7 +290,7 @@ export class CanvasRenderer {
     this.ctx.save();
     this.ctx.strokeStyle = isHighlighted ? this.theme.highlight : 'rgba(180,180,180,0.6)';
     this.ctx.lineWidth = 1 / this.transform.zoom;
-    
+
     // Single tick mark at midpoint (perpendicular to segment)
     const tick1X = midX + perpX * tickPerp;
     const tick1Y = midY + perpY * tickPerp;
@@ -371,7 +371,6 @@ export class CanvasRenderer {
     this.ctx.stroke();
     this.ctx.restore();
   }
-
   drawPerpendicularLine(perpLine: PerpendicularLine, points: Map<string, Point>, allElements: GeoElement[], isHighlighted: boolean = false) {
     const point = points.get(perpLine.pointId);
     if (!point) return;
@@ -380,130 +379,37 @@ export class CanvasRenderer {
     const refElement = allElements.find(el => el.id === perpLine.referenceLineId);
     if (!refElement) return;
 
-    let p1: Point | undefined;
-    let p2: Point | undefined;
+    // Create a map for the helper
+    const elementsMap = new Map(allElements.map(e => [e.id, e]));
+    // Add points to map
+    points.forEach((p, id) => {
+      if (!elementsMap.has(id)) elementsMap.set(id, p);
+    });
 
+    const refDir = getElementDirection(refElement.id, elementsMap);
+    if (!refDir) return;
+
+    const refDx = refDir.x;
+    const refDy = refDir.y;
+    const refLen = 1; // Normalized
+
+    // We also need a point on the reference line to calculate intersection
+    let refPoint: Point | undefined;
     if (refElement.type === 'line') {
-      p1 = points.get(refElement.p1Id);
-      p2 = points.get(refElement.p2Id);
+      refPoint = points.get(refElement.p1Id);
     } else if (refElement.type === 'perpendicular_bisector') {
-      p1 = points.get(refElement.p1Id);
-      p2 = points.get(refElement.p2Id);
-    } else if (refElement.type === 'angle_bisector') {
-      p1 = points.get(refElement.p1Id);
-      p2 = points.get(refElement.p2Id);
-    } else if (refElement.type === 'perpendicular_line') {
-      // For perpendicular line as reference, get its reference element
-      const refRefElement = allElements.find(el => el.id === refElement.referenceLineId);
-      if (!refRefElement) return;
-      if (refRefElement.type === 'line' || refRefElement.type === 'perpendicular_bisector') {
-        p1 = points.get(refRefElement.p1Id);
-        p2 = points.get(refRefElement.p2Id);
+      const p1 = points.get(refElement.p1Id);
+      const p2 = points.get(refElement.p2Id);
+      if (p1 && p2) {
+        refPoint = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2, id: 'mid', type: 'point', isFixed: false };
       }
+    } else if (refElement.type === 'angle_bisector') {
+      refPoint = points.get(refElement.vertexId);
+    } else if (refElement.type === 'perpendicular_line') {
+      refPoint = points.get(refElement.pointId);
     }
 
-    if (!p1 || !p2) return;
-
-    // Direction of reference line
-    let refDx = p2.x - p1.x;
-    let refDy = p2.y - p1.y;
-    let refLen = Math.hypot(refDx, refDy);
-
-    if (refLen < 1e-8) return;
-
-    // For perpendicular bisectors, the direction is perpendicular to the segment
-    if (refElement.type === 'perpendicular_bisector') {
-      // The segment direction
-      const segDx = refDx;
-      const segDy = refDy;
-      // Rotate 90 degrees to get the bisector direction
-      refDx = -segDy;
-      refDy = segDx;
-      refLen = Math.hypot(refDx, refDy);
-    } else if (refElement.type === 'angle_bisector') {
-      // For angle bisector, compute direction from vertex and two rays
-      const vertex = points.get(refElement.vertexId);
-      if (!vertex) return;
-
-      let ray1X = p1.x - vertex.x;
-      let ray1Y = p1.y - vertex.y;
-      const ray1Len = Math.hypot(ray1X, ray1Y);
-      if (ray1Len < 1e-8) return;
-      ray1X /= ray1Len;
-      ray1Y /= ray1Len;
-
-      let ray2X = p2.x - vertex.x;
-      let ray2Y = p2.y - vertex.y;
-      const ray2Len = Math.hypot(ray2X, ray2Y);
-      if (ray2Len < 1e-8) return;
-      ray2X /= ray2Len;
-      ray2Y /= ray2Len;
-
-      // Bisector direction is the average of the two normalized rays
-      refDx = (ray1X + ray2X) / 2;
-      refDy = (ray1Y + ray2Y) / 2;
-      refLen = Math.hypot(refDx, refDy);
-      if (refLen < 1e-8) return;
-    } else if (refElement.type === 'perpendicular_line') {
-      // For perpendicular line, recursively resolve the reference
-      const refRefElement = allElements.find(el => el.id === refElement.referenceLineId);
-      if (refRefElement) {
-        if (refRefElement.type === 'line' || refRefElement.type === 'perpendicular_bisector' || refRefElement.type === 'angle_bisector') {
-          const refRefP1 = points.get(refRefElement.p1Id);
-          const refRefP2 = points.get(refRefElement.p2Id);
-          if (refRefP1 && refRefP2) {
-            let refRefDx = refRefP2.x - refRefP1.x;
-            let refRefDy = refRefP2.y - refRefP1.y;
-            const refRefLen = Math.hypot(refRefDx, refRefDy);
-            if (refRefLen > 1e-8) {
-              // If perpendicular bisector, rotate to get bisector direction
-              if (refRefElement.type === 'perpendicular_bisector') {
-                const segDx = refRefDx;
-                const segDy = refRefDy;
-                refRefDx = -segDy;
-                refRefDy = segDx;
-              } else if (refRefElement.type === 'angle_bisector') {
-                // For angle bisector, compute direction from vertex and two rays
-                const vertex = points.get(refRefElement.vertexId);
-                if (vertex) {
-                  let ray1X = refRefP1.x - vertex.x;
-                  let ray1Y = refRefP1.y - vertex.y;
-                  const ray1Len = Math.hypot(ray1X, ray1Y);
-                  if (ray1Len > 1e-8) {
-                    ray1X /= ray1Len;
-                    ray1Y /= ray1Len;
-                  }
-
-                  let ray2X = refRefP2.x - vertex.x;
-                  let ray2Y = refRefP2.y - vertex.y;
-                  const ray2Len = Math.hypot(ray2X, ray2Y);
-                  if (ray2Len > 1e-8) {
-                    ray2X /= ray2Len;
-                    ray2Y /= ray2Len;
-                  }
-
-                  refRefDx = (ray1X + ray2X) / 2;
-                  refRefDy = (ray1Y + ray2Y) / 2;
-                  const bisLen = Math.hypot(refRefDx, refRefDy);
-                  if (bisLen > 1e-8) {
-                    refRefDx /= bisLen;
-                    refRefDy /= bisLen;
-                  }
-                }
-              }
-              // The perpendicular to the perpendicular is the original direction
-              refDx = -refRefDy;
-              refDy = refRefDx;
-              refLen = Math.hypot(refDx, refDy);
-            }
-          }
-        } else if (refRefElement.type === 'perpendicular_line') {
-          // Recursively handle perpendicular line as reference
-          // For now, skip to avoid infinite recursion - user can chain at most one level
-          return;
-        }
-      }
-    }
+    if (!refPoint) return;
 
     // Perpendicular direction (rotated 90 degrees)
     const perpX = -refDy / refLen;
@@ -539,19 +445,19 @@ export class CanvasRenderer {
     // Reference line passes through p1 and p2 in direction (refDx, refDy)
     // Perpendicular line passes through point in direction (perpX, perpY)
     // We need to find where they intersect
-    
+
     // Parametric equations:
     // Ref line: (p1.x + t1 * refDx, p1.y + t1 * refDy)
     // Perp line: (point.x + t2 * perpX, point.y + t2 * perpY)
-    
+
     // Solve: p1.x + t1 * refDx = point.x + t2 * perpX
     //        p1.y + t1 * refDy = point.y + t2 * perpY
-    
+
     const denom = refDx * perpY - refDy * perpX;
     if (Math.abs(denom) > 1e-8) {
-      const t1 = ((point.x - p1.x) * perpY - (point.y - p1.y) * perpX) / denom;
-      const intersectX = p1.x + t1 * refDx;
-      const intersectY = p1.y + t1 * refDy;
+      const t1 = ((point.x - refPoint.x) * perpY - (point.y - refPoint.y) * perpX) / denom;
+      const intersectX = refPoint.x + t1 * refDx;
+      const intersectY = refPoint.y + t1 * refDy;
 
       // Draw small right angle indicator at the intersection point
       const cornerSize = 8 / this.transform.zoom; // Increased from 6
@@ -642,12 +548,12 @@ export class CanvasRenderer {
     this.ctx.setLineDash([4 / this.transform.zoom, 4 / this.transform.zoom]);
 
     // Check if line from vertex to p1 exists
-    const line1Exists = allElements.some(el => 
-      el.type === 'line' && 
+    const line1Exists = allElements.some(el =>
+      el.type === 'line' &&
       ((el.p1Id === bisector.vertexId && el.p2Id === bisector.p1Id) ||
-       (el.p1Id === bisector.p1Id && el.p2Id === bisector.vertexId))
+        (el.p1Id === bisector.p1Id && el.p2Id === bisector.vertexId))
     );
-    
+
     if (!line1Exists) {
       // Draw dotted ray from vertex to p1
       this.ctx.beginPath();
@@ -657,12 +563,12 @@ export class CanvasRenderer {
     }
 
     // Check if line from vertex to p2 exists
-    const line2Exists = allElements.some(el => 
-      el.type === 'line' && 
+    const line2Exists = allElements.some(el =>
+      el.type === 'line' &&
       ((el.p1Id === bisector.vertexId && el.p2Id === bisector.p2Id) ||
-       (el.p1Id === bisector.p2Id && el.p2Id === bisector.vertexId))
+        (el.p1Id === bisector.p2Id && el.p2Id === bisector.vertexId))
     );
-    
+
     if (!line2Exists) {
       // Draw dotted ray from vertex to p2
       this.ctx.beginPath();
@@ -763,7 +669,7 @@ export class CanvasRenderer {
 
   drawIntersectionPreview(pos: { x: number; y: number }, isHovered: boolean) {
     this.ctx.save();
-    
+
     // Draw base indicator
     this.ctx.strokeStyle = this.theme.highlight;
     this.ctx.globalAlpha = 0.6;
@@ -772,7 +678,7 @@ export class CanvasRenderer {
     this.ctx.beginPath();
     this.ctx.arc(pos.x, pos.y, 8 / this.transform.zoom, 0, Math.PI * 2);
     this.ctx.stroke();
-    
+
     // Draw larger highlight if hovered
     if (isHovered) {
       this.ctx.strokeStyle = this.theme.highlight;
@@ -782,13 +688,13 @@ export class CanvasRenderer {
       this.ctx.arc(pos.x, pos.y, 15 / this.transform.zoom, 0, Math.PI * 2);
       this.ctx.stroke();
     }
-    
+
     this.ctx.restore();
   }
 
   render(
-    elements: GeoElement[], 
-    hoveredId: string | null, 
+    elements: GeoElement[],
+    hoveredId: string | null,
     hoveredElementId: string | null = null,
     selectedReferenceLineId: string | null = null
   ) {
@@ -809,11 +715,60 @@ export class CanvasRenderer {
       else if (el.type === 'angle_bisector') angleBisectors.push(el);
     });
 
-    lines.forEach(line => this.drawLine(line, points, line.id === hoveredElementId || line.id === selectedReferenceLineId));
-    circles.forEach(circle => this.drawCircle(circle, points, circle.id === hoveredElementId));
-    bisectors.forEach(bisector => this.drawPerpendicularBisector(bisector, points, bisector.id === hoveredElementId || bisector.id === selectedReferenceLineId));
-    perpLines.forEach(perpLine => this.drawPerpendicularLine(perpLine, points, elements, perpLine.id === hoveredElementId || perpLine.id === selectedReferenceLineId));
-    angleBisectors.forEach(bisector => this.drawAngleBisector(bisector, points, elements, bisector.id === hoveredElementId || bisector.id === selectedReferenceLineId));
+    // Draw non-highlighted elements first
+    lines.forEach(line => {
+      if (line.id !== hoveredElementId && line.id !== selectedReferenceLineId) {
+        this.drawLine(line, points, false);
+      }
+    });
+    circles.forEach(circle => {
+      if (circle.id !== hoveredElementId) {
+        this.drawCircle(circle, points, false);
+      }
+    });
+    bisectors.forEach(bisector => {
+      if (bisector.id !== hoveredElementId && bisector.id !== selectedReferenceLineId) {
+        this.drawPerpendicularBisector(bisector, points, false);
+      }
+    });
+    perpLines.forEach(perpLine => {
+      if (perpLine.id !== hoveredElementId && perpLine.id !== selectedReferenceLineId) {
+        this.drawPerpendicularLine(perpLine, points, elements, false);
+      }
+    });
+    angleBisectors.forEach(bisector => {
+      if (bisector.id !== hoveredElementId && bisector.id !== selectedReferenceLineId) {
+        this.drawAngleBisector(bisector, points, elements, false);
+      }
+    });
+
+    // Draw highlighted elements last (on top)
+    lines.forEach(line => {
+      if (line.id === hoveredElementId || line.id === selectedReferenceLineId) {
+        this.drawLine(line, points, true);
+      }
+    });
+    circles.forEach(circle => {
+      if (circle.id === hoveredElementId) {
+        this.drawCircle(circle, points, true);
+      }
+    });
+    bisectors.forEach(bisector => {
+      if (bisector.id === hoveredElementId || bisector.id === selectedReferenceLineId) {
+        this.drawPerpendicularBisector(bisector, points, true);
+      }
+    });
+    perpLines.forEach(perpLine => {
+      if (perpLine.id === hoveredElementId || perpLine.id === selectedReferenceLineId) {
+        this.drawPerpendicularLine(perpLine, points, elements, true);
+      }
+    });
+    angleBisectors.forEach(bisector => {
+      if (bisector.id === hoveredElementId || bisector.id === selectedReferenceLineId) {
+        this.drawAngleBisector(bisector, points, elements, true);
+      }
+    });
+
     points.forEach(point => this.drawPoint(point, point.id === hoveredId));
   }
 }
