@@ -29,6 +29,7 @@ export interface GeometryState {
   redo: () => void;
   startConstruction: (data: any) => void;
   completeConstruction: () => void;
+  getUpdateOrder: (id: string) => string[];
 }
 
 // Simple history for undo/redo
@@ -204,4 +205,6 @@ export const useGeometryStore = create<GeometryState>((set, get) => ({
       });
     }
   },
+
+  getUpdateOrder: (id) => graph.getUpdateOrder([id]),
 }));

@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react';
 import { useGeometryStore } from '../store/useGeometryStore';
 import { CanvasRenderer } from '../core/canvas/renderer';
 import type { Vec2, Point, Line, Circle, GeoElement } from '../core/geometry/types';
-import { generateId } from '../core/geometry/utils';
+import { generateId, recalculateElement } from '../core/geometry/utils';
 import LabelTool, { handleLabelClick } from './LabelTool';
 import { handlePerpendicularBisectorClick } from './PerpendicularBisectorTool';
 import PerpendicularBisectorTool from './PerpendicularBisectorTool';
@@ -147,14 +147,28 @@ export default function AppCanvas() {
     // Create modified elements array if dragging a point or drawing with temp points
     let renderElements = elements;
 
-    // If dragging a point with select tool, show temp position
+    // If dragging a point with select tool, show temp position AND recalculate dependents
     if (draggedPointId && draggedPointPos) {
-      renderElements = elements.map(el => {
-        if (el.id === draggedPointId && el.type === 'point') {
-          return { ...el, x: draggedPointPos.x, y: draggedPointPos.y };
-        }
-        return el;
-      });
+      // 1. Create map with updated dragged point
+      const elementsMap = new Map(elements.map(el => [el.id, el]));
+      const draggedPoint = elementsMap.get(draggedPointId);
+
+      if (draggedPoint && draggedPoint.type === 'point') {
+        const updatedPoint = { ...draggedPoint, x: draggedPointPos.x, y: draggedPointPos.y };
+        elementsMap.set(draggedPointId, updatedPoint);
+
+        // 2. Get update order and recalculate dependents
+        const updateOrder = store.getUpdateOrder(draggedPointId);
+        updateOrder.forEach(id => {
+          const el = elementsMap.get(id);
+          if (el) {
+            const updatedEl = recalculateElement(el, elementsMap);
+            elementsMap.set(id, updatedEl);
+          }
+        });
+
+        renderElements = Array.from(elementsMap.values());
+      }
     }
 
     // If drawing a line or circle, add temp first point to render

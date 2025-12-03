@@ -192,28 +192,64 @@ export class CanvasRenderer {
     }
     this.ctx.setLineDash([]);
 
-    // Calculate intersection with canvas bounds
+    // Calculate visible viewport bounds in world space
     const { width, height } = this.ctx.canvas;
+    const minX = -this.transform.panX / this.transform.zoom;
+    const minY = -this.transform.panY / this.transform.zoom;
+    const maxX = (width - this.transform.panX) / this.transform.zoom;
+    const maxY = (height - this.transform.panY) / this.transform.zoom;
+
     // Direction vector
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
+
     if (Math.abs(dx) < 1e-8 && Math.abs(dy) < 1e-8) {
       this.ctx.restore();
       return;
     }
-    // Find two far points on the line that are well outside the canvas
-    const len = Math.sqrt(dx * dx + dy * dy);
-    const ux = dx / len;
-    const uy = dy / len;
-    const big = Math.max(width, height) * 2 / this.transform.zoom;
-    const ex1 = p1.x - ux * big;
-    const ey1 = p1.y - uy * big;
-    const ex2 = p2.x + ux * big;
-    const ey2 = p2.y + uy * big;
-    this.ctx.beginPath();
-    this.ctx.moveTo(ex1, ey1);
-    this.ctx.lineTo(ex2, ey2);
-    this.ctx.stroke();
+
+    // Cohen-Sutherland-like clipping or just finding intersections with the 4 boundary lines
+    // Line: P = p1 + t * (p2 - p1)
+    // We want to find t values for intersections with x=minX, x=maxX, y=minY, y=maxY
+
+    let tMin = -Infinity;
+    let tMax = Infinity;
+
+    // Check intersection with vertical lines x=minX and x=maxX
+    if (Math.abs(dx) > 1e-10) {
+      const t1 = (minX - p1.x) / dx;
+      const t2 = (maxX - p1.x) / dx;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      // Line is vertical. If it's outside the x-range, it's not visible.
+      if (p1.x < minX || p1.x > maxX) {
+        this.ctx.restore();
+        return;
+      }
+    }
+
+    // Check intersection with horizontal lines y=minY and y=maxY
+    if (Math.abs(dy) > 1e-10) {
+      const t1 = (minY - p1.y) / dy;
+      const t2 = (maxY - p1.y) / dy;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      // Line is horizontal. If it's outside the y-range, it's not visible.
+      if (p1.y < minY || p1.y > maxY) {
+        this.ctx.restore();
+        return;
+      }
+    }
+
+    if (tMax >= tMin) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(p1.x + tMin * dx, p1.y + tMin * dy);
+      this.ctx.lineTo(p1.x + tMax * dx, p1.y + tMax * dy);
+      this.ctx.stroke();
+    }
+
     this.ctx.restore();
 
     // Draw visible segment (solid)
@@ -340,16 +376,49 @@ export class CanvasRenderer {
 
     // Calculate intersection with canvas bounds
     const { width, height } = this.ctx.canvas;
-    const big = Math.max(width, height) * 2 / this.transform.zoom;
-    const extStart1X = midX - perpX * big;
-    const extStart1Y = midY - perpY * big;
-    const extStart2X = midX + perpX * big;
-    const extStart2Y = midY + perpY * big;
+    const minX = -this.transform.panX / this.transform.zoom;
+    const minY = -this.transform.panY / this.transform.zoom;
+    const maxX = (width - this.transform.panX) / this.transform.zoom;
+    const maxY = (height - this.transform.panY) / this.transform.zoom;
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(extStart1X, extStart1Y);
-    this.ctx.lineTo(extStart2X, extStart2Y);
-    this.ctx.stroke();
+    // Line: P = mid + t * perp
+    // perp is normalized (length 1)
+
+    let tMin = -Infinity;
+    let tMax = Infinity;
+
+    // Check intersection with vertical lines x=minX and x=maxX
+    if (Math.abs(perpX) > 1e-10) {
+      const t1 = (minX - midX) / perpX;
+      const t2 = (maxX - midX) / perpX;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      if (midX < minX || midX > maxX) {
+        this.ctx.restore();
+        return; // Outside horizontal bounds
+      }
+    }
+
+    // Check intersection with horizontal lines y=minY and y=maxY
+    if (Math.abs(perpY) > 1e-10) {
+      const t1 = (minY - midY) / perpY;
+      const t2 = (maxY - midY) / perpY;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      if (midY < minY || midY > maxY) {
+        this.ctx.restore();
+        return; // Outside vertical bounds
+      }
+    }
+
+    if (tMax >= tMin) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(midX + tMin * perpX, midY + tMin * perpY);
+      this.ctx.lineTo(midX + tMax * perpX, midY + tMax * perpY);
+      this.ctx.stroke();
+    }
     this.ctx.restore();
 
     // Draw right angle indicator at midpoint
@@ -429,16 +498,46 @@ export class CanvasRenderer {
 
     // Calculate intersection with canvas bounds
     const { width, height } = this.ctx.canvas;
-    const big = Math.max(width, height) * 2 / this.transform.zoom;
-    const extStart1X = point.x - perpX * big;
-    const extStart1Y = point.y - perpY * big;
-    const extStart2X = point.x + perpX * big;
-    const extStart2Y = point.y + perpY * big;
+    const minX = -this.transform.panX / this.transform.zoom;
+    const minY = -this.transform.panY / this.transform.zoom;
+    const maxX = (width - this.transform.panX) / this.transform.zoom;
+    const maxY = (height - this.transform.panY) / this.transform.zoom;
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(extStart1X, extStart1Y);
-    this.ctx.lineTo(extStart2X, extStart2Y);
-    this.ctx.stroke();
+    // Line: P = point + t * perp
+
+    let tMin = -Infinity;
+    let tMax = Infinity;
+
+    if (Math.abs(perpX) > 1e-10) {
+      const t1 = (minX - point.x) / perpX;
+      const t2 = (maxX - point.x) / perpX;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      if (point.x < minX || point.x > maxX) {
+        this.ctx.restore();
+        return;
+      }
+    }
+
+    if (Math.abs(perpY) > 1e-10) {
+      const t1 = (minY - point.y) / perpY;
+      const t2 = (maxY - point.y) / perpY;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      if (point.y < minY || point.y > maxY) {
+        this.ctx.restore();
+        return;
+      }
+    }
+
+    if (tMax >= tMin) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(point.x + tMin * perpX, point.y + tMin * perpY);
+      this.ctx.lineTo(point.x + tMax * perpX, point.y + tMax * perpY);
+      this.ctx.stroke();
+    }
     this.ctx.restore();
 
     // Find intersection point between reference line and perpendicular line
@@ -529,16 +628,46 @@ export class CanvasRenderer {
 
     // Extend line far beyond vertex in both directions
     const { width, height } = this.ctx.canvas;
-    const big = Math.max(width, height) * 2 / this.transform.zoom;
-    const extStart1X = vertex.x - bisectorNormX * big;
-    const extStart1Y = vertex.y - bisectorNormY * big;
-    const extStart2X = vertex.x + bisectorNormX * big;
-    const extStart2Y = vertex.y + bisectorNormY * big;
+    const minX = -this.transform.panX / this.transform.zoom;
+    const minY = -this.transform.panY / this.transform.zoom;
+    const maxX = (width - this.transform.panX) / this.transform.zoom;
+    const maxY = (height - this.transform.panY) / this.transform.zoom;
 
-    this.ctx.beginPath();
-    this.ctx.moveTo(extStart1X, extStart1Y);
-    this.ctx.lineTo(extStart2X, extStart2Y);
-    this.ctx.stroke();
+    // Line: P = vertex + t * bisectorNorm
+
+    let tMin = -Infinity;
+    let tMax = Infinity;
+
+    if (Math.abs(bisectorNormX) > 1e-10) {
+      const t1 = (minX - vertex.x) / bisectorNormX;
+      const t2 = (maxX - vertex.x) / bisectorNormX;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      if (vertex.x < minX || vertex.x > maxX) {
+        this.ctx.restore();
+        return;
+      }
+    }
+
+    if (Math.abs(bisectorNormY) > 1e-10) {
+      const t1 = (minY - vertex.y) / bisectorNormY;
+      const t2 = (maxY - vertex.y) / bisectorNormY;
+      tMin = Math.max(tMin, Math.min(t1, t2));
+      tMax = Math.min(tMax, Math.max(t1, t2));
+    } else {
+      if (vertex.y < minY || vertex.y > maxY) {
+        this.ctx.restore();
+        return;
+      }
+    }
+
+    if (tMax >= tMin) {
+      this.ctx.beginPath();
+      this.ctx.moveTo(vertex.x + tMin * bisectorNormX, vertex.y + tMin * bisectorNormY);
+      this.ctx.lineTo(vertex.x + tMax * bisectorNormX, vertex.y + tMax * bisectorNormY);
+      this.ctx.stroke();
+    }
     this.ctx.restore();
 
     // Draw dotted reference rays from vertex to p1 and p2 (if no lines exist)
