@@ -131,3 +131,75 @@ export function recalculateElement(
 
   return element;
 }
+
+/**
+ * Get the normalized direction vector {dx, dy} for any linear element.
+ * Returns null if direction cannot be determined.
+ */
+export function getElementDirection(
+  id: string,
+  allElements: Map<string, GeoElement>
+): Vec2 | null {
+  const el = allElements.get(id);
+  if (!el) return null;
+
+  if (el.type === 'line') {
+    const p1 = allElements.get(el.p1Id) as Point;
+    const p2 = allElements.get(el.p2Id) as Point;
+    if (!p1 || !p2) return null;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    return len > EPSILON ? { x: dx / len, y: dy / len } : null;
+  }
+
+  if (el.type === 'perpendicular_bisector') {
+    const p1 = allElements.get(el.p1Id) as Point;
+    const p2 = allElements.get(el.p2Id) as Point;
+    if (!p1 || !p2) return null;
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const len = Math.hypot(dx, dy);
+    if (len < EPSILON) return null;
+    // Perpendicular: (-dy, dx)
+    return { x: -dy / len, y: dx / len };
+  }
+
+  if (el.type === 'angle_bisector') {
+    const vertex = allElements.get(el.vertexId) as Point;
+    const p1 = allElements.get(el.p1Id) as Point;
+    const p2 = allElements.get(el.p2Id) as Point;
+    if (!vertex || !p1 || !p2) return null;
+
+    let ray1X = p1.x - vertex.x;
+    let ray1Y = p1.y - vertex.y;
+    const ray1Len = Math.hypot(ray1X, ray1Y);
+
+    let ray2X = p2.x - vertex.x;
+    let ray2Y = p2.y - vertex.y;
+    const ray2Len = Math.hypot(ray2X, ray2Y);
+
+    if (ray1Len < EPSILON || ray2Len < EPSILON) return null;
+
+    ray1X /= ray1Len;
+    ray1Y /= ray1Len;
+    ray2X /= ray2Len;
+    ray2Y /= ray2Len;
+
+    const bisectX = ray1X + ray2X;
+    const bisectY = ray1Y + ray2Y;
+    const bisectLen = Math.hypot(bisectX, bisectY);
+
+    return bisectLen > EPSILON ? { x: bisectX / bisectLen, y: bisectY / bisectLen } : null;
+  }
+
+  if (el.type === 'perpendicular_line') {
+    // Recursive call to get reference direction
+    const refDir = getElementDirection(el.referenceLineId, allElements);
+    if (!refDir) return null;
+    // Perpendicular to reference: (-y, x)
+    return { x: -refDir.y, y: refDir.x };
+  }
+
+  return null;
+}
