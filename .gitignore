@@ -6,3 +6,5 @@ playwright-report
 .env
 .env.local
 .DS_Store
+feedback/*
+!feedback/README.md

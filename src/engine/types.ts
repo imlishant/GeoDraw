@@ -69,7 +69,6 @@ interface Base {
   name: string; // auto-generated, user-editable
   showLabel?: boolean;
   hidden?: boolean;
-  given?: boolean; // part of the problem statement, not the solution
   style?: Style;
 }
 
@@ -187,9 +186,6 @@ export interface Doc {
   order: Id[]; // creation order = valid topological order
   steps: Step[];
   measures: Measure[];
-  problemId?: string;
-  /** Problem mode: given names (A, B, l…) → object ids, used by the checker. */
-  problemGivens?: Record<string, Id>;
   createdAt: number;
   updatedAt: number;
 }

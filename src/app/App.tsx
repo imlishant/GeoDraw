@@ -5,7 +5,7 @@ import { Toolbar } from './components/Toolbar';
 import { StepsButton, StepsDrawer } from './components/StepsDrawer';
 import { SelectionPopover } from './components/Popover';
 import { Dialogs } from './components/Dialogs';
-import { Toasts, ZoomControls } from './components/Chrome';
+import { RestoreButton, Toasts, ZoomControls } from './components/Chrome';
 import { controller, deleteWithConfirm } from './controller';
 import { clearSession, doRedo, doUndo, loadDoc, setTool, toast, useApp } from './store';
 import { applyThemeVars, DARK, LIGHT } from '../render/theme';
@@ -50,7 +50,7 @@ async function startup() {
     lsSet('drawgeo.current', useApp.getState().doc.id);
     if (!lsGet('drawgeo.welcomed', false)) {
       lsSet('drawgeo.welcomed', true);
-      toast('Pick a tool below to start, or open Problems from the menu ☰', 'info', 6000);
+      toast('Pick a tool below to start', 'info', 5000);
     }
   }
 }
@@ -132,7 +132,7 @@ function useKeyboard() {
         return deleteWithConfirm(s.selection);
       }
       if (k === 'h' && s.selection.length && !s.readOnly) {
-        const objs = s.selection.map((id) => s.doc.objects[id]).filter((o) => o && !o.given);
+        const objs = s.selection.map((id) => s.doc.objects[id]).filter(Boolean);
         if (objs.length) applyPatch(setObjectsPatch(s.doc, objs.map((o) => ({ ...o, hidden: !o.hidden })), 'Hide'));
         return;
       }
@@ -172,6 +172,7 @@ export function App() {
       <CanvasView />
       <TopBar />
       <StepsButton />
+      <RestoreButton />
       <StepsDrawer />
       <Toolbar />
       <ZoomControls />

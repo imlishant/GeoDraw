@@ -67,8 +67,8 @@ export function exportSVG(doc: Doc, values: Values, o: ExportOpts): string {
     const ob = doc.objects[id];
     const g = values.get(id);
     if (!ob || !g || ob.hidden) continue;
-    const color = objectColor(t, ob.style?.color, !!ob.given);
-    const sw = ob.given ? 2 : 1.4;
+    const color = objectColor(t, ob.style?.color);
+    const sw = 1.4;
     const dash = ob.style?.dashed ? ' stroke-dasharray="7 5"' : '';
     if (g.k === 'line') {
       const seg = clipLine(g, cam, vp, 0);
@@ -96,7 +96,7 @@ export function exportSVG(doc: Doc, values: Values, o: ExportOpts): string {
     const ob = doc.objects[id];
     const g = values.get(id);
     if (!ob || !g || ob.hidden || g.k !== 'point') continue;
-    const color = objectColor(t, ob.style?.color, !!ob.given);
+    const color = objectColor(t, ob.style?.color);
     const p = toScreen(cam, vp, g.x, g.y);
     parts.push(`<circle cx="${f(p.x)}" cy="${f(p.y)}" r="4.2" fill="${isDraggable(ob) ? color : t.bg}" stroke="${color}" stroke-width="1.6"/>`);
     if (o.showPointLabels && ob.showLabel !== false) {

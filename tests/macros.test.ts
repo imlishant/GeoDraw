@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import fc from 'fast-check';
-import { Scratch } from '../src/engine/scratch';
+import { Scratch } from './scratch';
 import {
   angleBisectorMacro,
   midpointMacro,

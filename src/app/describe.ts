@@ -15,8 +15,6 @@ export function describeStep(doc: Doc, s: Step): string {
 /** Plain-text write-up of the solution: numbered steps and totals. */
 export function stepsAsText(doc: Doc): string {
   const lines = [`${doc.title}`, ''];
-  const givens = doc.order.filter((id) => doc.objects[id]?.given).map((id) => doc.objects[id].name);
-  if (givens.length) lines.push(`Given: ${givens.join(', ')}`, '');
   doc.steps.forEach((s, i) => {
     lines.push(`${i + 1}. ${describeStep(doc, s)}${s.note ? `\n   ${s.note}` : ''}`);
   });

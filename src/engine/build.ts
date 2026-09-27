@@ -1,5 +1,5 @@
 // Pure tool builders: given picked inputs, produce the new objects.
-// Used by the UI, by problem reference solutions, and by tests, so there is one
+// Used by the UI and by tests, so there is one
 // code path for "what a tool does".
 
 import type { Doc, GeoObject, Id, Kind, LineObj, MapDef, Style, ToolId, Values } from './types';

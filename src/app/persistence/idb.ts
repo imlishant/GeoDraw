@@ -3,7 +3,7 @@
 
 const DB_NAME = 'drawgeo';
 const VERSION = 1;
-export type StoreName = 'docs' | 'progress';
+export type StoreName = 'docs';
 
 let dbPromise: Promise<IDBDatabase> | null = null;
 
@@ -15,7 +15,6 @@ function open(): Promise<IDBDatabase> {
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs', { keyPath: 'id' });
-        if (!db.objectStoreNames.contains('progress')) db.createObjectStore('progress', { keyPath: 'problemId' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);

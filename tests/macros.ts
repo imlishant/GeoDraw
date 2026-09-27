@@ -3,7 +3,7 @@
 // composite tools give exactly the same objects as these ruler-and-compass recipes.
 
 import type { Id } from '../src/engine/types';
-import type { Scratch } from '../src/engine/scratch';
+import type { Scratch } from './scratch';
 
 /** Perpendicular bisector of AB. */
 export function perpBisectorMacro(s: Scratch, a: Id, b: Id): Id {

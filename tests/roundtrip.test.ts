@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Scratch } from '../src/engine/scratch';
+import { Scratch } from './scratch';
 import { evaluateDoc } from '../src/engine/evaluate';
 import { docToJSON, parseDoc } from '../src/engine/serialize';
 import { embedInPng, extractFromPng, extractFromSvg, exportSVG } from '../src/render/export';

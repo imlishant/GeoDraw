@@ -6,7 +6,6 @@ create table if not exists public.constructions (
   owner       uuid not null references auth.users (id) on delete cascade,
   title       text not null default 'Untitled construction',
   doc         jsonb not null,
-  problem_id  text,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );

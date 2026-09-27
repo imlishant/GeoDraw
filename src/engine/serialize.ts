@@ -37,7 +37,6 @@ export function parseDoc(text: string): Doc {
     order: d.order,
     steps: d.steps,
     measures: Array.isArray(d.measures) ? d.measures : [],
-    ...(d.problemId ? { problemId: d.problemId, problemGivens: d.problemGivens } : {}),
     createdAt: typeof d.createdAt === 'number' ? d.createdAt : now,
     updatedAt: typeof d.updatedAt === 'number' ? d.updatedAt : now,
   };

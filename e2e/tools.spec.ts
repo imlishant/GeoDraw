@@ -32,7 +32,7 @@ test('every kind of tool works without errors', async ({ page }) => {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  // givens: points A(-100,0) B(100,0), segment AB, circle c around O(0,-120)
+  // setup: points A(-100,0) B(100,0), segment AB, circle c around O(0,-120)
   await more(page, 'segment');
   await click(page, -100, 0);
   await click(page, 100, 0);
@@ -122,7 +122,7 @@ test('every kind of tool works without errors', async ({ page }) => {
   const measures = await page.evaluate(() => (window as any).__drawgeo.useApp.getState().doc.measures.length);
   expect(measures).toBe(2);
 
-  // delete a given point → cascade confirmation
+  // delete a point that others depend on → cascade confirmation
   await more(page, 'delete');
   await click(page, -100, 0);
   await expect(page.getByRole('dialog', { name: 'Are you sure?' })).toBeVisible();

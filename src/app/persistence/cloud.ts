@@ -55,18 +55,17 @@ export async function signOut(): Promise<void> {
 export async function saveCloud(doc: Doc, userId: string): Promise<void> {
   const { error } = await (await sb())
     .from('constructions')
-    .upsert({ id: doc.id, owner: userId, title: doc.title, doc, problem_id: doc.problemId ?? null, updated_at: new Date(doc.updatedAt).toISOString() });
+    .upsert({ id: doc.id, owner: userId, title: doc.title, doc, updated_at: new Date(doc.updatedAt).toISOString() });
   if (error) throw error;
 }
 
 export async function listCloud(): Promise<DocSummary[]> {
-  const { data, error } = await (await sb()).from('constructions').select('id, title, updated_at, problem_id, doc').order('updated_at', { ascending: false });
+  const { data, error } = await (await sb()).from('constructions').select('id, title, updated_at, doc').order('updated_at', { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((r: { id: string; title: string; updated_at: string; problem_id: string | null; doc: Doc }) => ({
+  return (data ?? []).map((r: { id: string; title: string; updated_at: string; doc: Doc }) => ({
     id: r.id,
     title: r.title,
     updatedAt: Date.parse(r.updated_at),
-    problemId: r.problem_id ?? undefined,
     objectCount: r.doc?.order?.length ?? 0,
     stepCount: r.doc?.steps?.length ?? 0,
   }));

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { isToolAllowed, setTool, togglePin, useApp } from '../store';
+import { isToolAllowed, setTool, toast, togglePin, useApp } from '../store';
 import { MAIN_BAR, MAX_PINS, MORE_GROUPS, TOOL_BY_KEY, TOOLS, type ToolKey, type ToolUI } from '../tools';
 import { Icon, ToolIcon } from './Icons';
 
@@ -14,10 +14,10 @@ export function Toolbar() {
   const moreOpen = useApp((s) => s.moreOpen);
   const picks = useApp((s) => s.session.picks);
   const readOnly = useApp((s) => s.readOnly);
-  useApp((s) => `${s.doc.problemId ?? ''}|${s.settings.strict}`); // re-render when the allowed tools change
+  useApp((s) => s.settings.strict); // re-render when the allowed tools change
   const t = TOOL_BY_KEY[tool];
   const extra = [...pins, ...(lastMore && !pins.includes(lastMore) ? [lastMore] : [])].filter((k) => !MAIN_BAR.includes(k));
-  const hint = readOnly ? 'Viewing a shared construction · pan and zoom, or replay the steps' : t.hint(picks);
+  const hint = readOnly ? 'Shared construction · drag points to explore, then put them back · replay the steps from the book' : t.hint(picks);
 
   const btn = (k: ToolKey) => {
     const ui = TOOL_BY_KEY[k];
@@ -59,6 +59,17 @@ export function Toolbar() {
           <Icon name="more" size={24} />
         </button>
       </div>
+      {moreOpen && (
+        <div
+          className="more-backdrop"
+          data-testid="more-backdrop"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            useApp.setState({ moreOpen: false });
+          }}
+        />
+      )}
       {moreOpen && <MoreDrawer />}
     </div>
   );
@@ -79,39 +90,42 @@ function MoreDrawer() {
     return TOOLS.filter((t) => t.group !== 'main' && (!s || `${t.label} ${t.keywords ?? ''}`.toLowerCase().includes(s)));
   }, [q]);
 
-  const longPress = useRef<number | null>(null);
+  const pin = (t: ToolUI) => {
+    const was = useApp.getState().settings.pins.includes(t.key);
+    togglePin(t.key, MAX_PINS);
+    const now = useApp.getState().settings.pins.includes(t.key);
+    if (was !== now) toast(now ? `${t.label} pinned to the bar` : `${t.label} unpinned`, 'info', 1800);
+  };
   const item = (t: ToolUI) => {
     const allowed = isToolAllowed(t.key);
+    const pinned = pins.includes(t.key);
     return (
-      <button
-        key={t.key}
-        className={`more-item${tool === t.key ? ' active' : ''}`}
-        data-tool={t.key}
-        disabled={!allowed}
-        title={`${tooltip(t)} · right-click or long-press to pin`}
-        onClick={() => setTool(t.key)}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          togglePin(t.key, MAX_PINS);
-        }}
-        onPointerDown={(e) => {
-          if (e.pointerType !== 'touch') return;
-          longPress.current = window.setTimeout(() => {
-            longPress.current = null;
-            togglePin(t.key, MAX_PINS);
-          }, 550);
-        }}
-        onPointerUp={() => longPress.current && clearTimeout(longPress.current)}
-        onPointerLeave={() => longPress.current && clearTimeout(longPress.current)}
-      >
-        {pins.includes(t.key) && (
-          <span className="pinned" aria-label="pinned">
-            <Icon name="pin" size={12} />
-          </span>
-        )}
-        <ToolIcon tool={t.key} size={26} />
-        <span className="name">{t.label}</span>
-      </button>
+      <div key={t.key} className="more-cell">
+        <button
+          className={`more-item${tool === t.key ? ' active' : ''}`}
+          data-tool={t.key}
+          disabled={!allowed}
+          title={tooltip(t)}
+          onClick={() => setTool(t.key)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            pin(t);
+          }}
+        >
+          <ToolIcon tool={t.key} size={26} />
+          <span className="name">{t.label}</span>
+        </button>
+        <button
+          className={`pin-btn${pinned ? ' on' : ''}`}
+          aria-label={pinned ? `Unpin ${t.label}` : `Pin ${t.label} to the bar`}
+          aria-pressed={pinned}
+          title={pinned ? 'Unpin from the bar' : 'Pin to the bar'}
+          data-pin={t.key}
+          onClick={() => pin(t)}
+        >
+          <Icon name="pin" size={14} />
+        </button>
+      </div>
     );
   };
 
@@ -131,6 +145,9 @@ function MoreDrawer() {
             e.stopPropagation();
           }}
         />
+        <button className="more-close" aria-label="Close" title="Close (Esc)" onClick={() => useApp.setState({ moreOpen: false })}>
+          <Icon name="close" size={18} />
+        </button>
       </div>
       <div className="more-body">
         {MORE_GROUPS.map(({ group, title }) => {
@@ -145,7 +162,7 @@ function MoreDrawer() {
         })}
         {!matches.length && <div className="empty">No tool matches “{q}”.</div>}
       </div>
-      <div className="more-foot muted">Right-click or long-press a tool to pin it to the bar (up to {MAX_PINS}).</div>
+      <div className="more-foot muted">Tap the pin on a tool to keep it on the bar (up to {MAX_PINS}).</div>
     </div>
   );
 }

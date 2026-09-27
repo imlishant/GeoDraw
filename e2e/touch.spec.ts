@@ -48,6 +48,15 @@ test('one finger drags a point; two fingers pinch-zoom', async ({ page }) => {
     return [...s.values.values()].find((g: any) => g?.k === 'circle').r;
   });
   expect(r).toBeGreaterThan(110);
+  // restore button: bottom-right on phones (opposite the book), bottom-left next to it on tablets
+  const rb = page.getByTestId('restore-moved');
+  await expect(rb).toBeVisible();
+  const box = (await rb.boundingBox())!;
+  const vw = page.viewportSize()!.width;
+  if (vw < 600) expect(box.x).toBeGreaterThan(vw / 2);
+  else expect(box.x).toBeLessThan(vw / 4);
+  await rb.tap();
+  await expect(rb).toHaveCount(0);
 
   // pinch out with two fingers
   const z0 = await page.evaluate(() => (window as any).__drawgeo.controller.cam.zoom);

@@ -11,7 +11,7 @@ import { clampPan, fit, panBy, toScreen, toWorld, zoomAt, type Camera } from '..
 import { boundingBox, nearestPoint, objectAt, paramOn, snap, virtualIntersections, type HitScene, type Snap } from '../render/hit';
 import { LIGHT, type Theme } from '../render/theme';
 import { DISTINCT_POINTS, TOOL_BY_KEY, type Pick, type ToolUI } from './tools';
-import { applyPatch, askConfirm, askNumber, clearSession, problemOf, toast, useApp, type AppState } from './store';
+import { applyPatch, askConfirm, askNumber, clearSession, noteMoved, toast, useApp, type AppState } from './store';
 import { formatNumber } from './format';
 
 type Gesture =
@@ -141,7 +141,7 @@ export class Controller {
     const vp = this.vp();
     const s = useApp.getState();
     const phone = vp.w < 600;
-    const top = (phone ? 70 : 76) + (s.doc.problemId || s.readOnly ? (phone ? 90 : 60) : 0);
+    const top = (phone ? 70 : 76) + (s.readOnly ? (phone ? 90 : 60) : 0);
     const bottom = phone ? 150 : 130;
     const side = phone ? 16 : Math.min(80, vp.w * 0.08);
     return { top, bottom, left: side, right: side };
@@ -151,14 +151,7 @@ export class Controller {
     const s = useApp.getState();
     const box = boundingBox(s.doc, s.values);
     const vp = this.vp();
-    if (box && !s.doc.steps.length) {
-      // Only givens so far: frame a square region 1.8× their size so there is room to
-      // construct around them (Euclidea frames its problems the same way).
-      const side = 1.8 * Math.max(box.maxX - box.minX, box.maxY - box.minY, 100);
-      const cx = (box.minX + box.maxX) / 2;
-      const cy = (box.minY + box.maxY) / 2;
-      this.setCam(fit({ minX: cx - side / 2, maxX: cx + side / 2, minY: cy - side / 2, maxY: cy + side / 2 }, vp, this.insets(), 1, 1.5));
-    } else if (box) this.setCam(fit(box, vp, this.insets(), 0.92, 1.5));
+    if (box) this.setCam(fit(box, vp, this.insets(), 0.92, 1.5));
     else this.setCam({ cx: 0, cy: 0, zoom: Math.min(1, Math.min(vp.w, vp.h) / 520) || 1 });
   }
 
@@ -205,7 +198,6 @@ export class Controller {
     let allowed: Set<Id> | null = null;
     if (s.scrub !== null) {
       allowed = new Set();
-      for (const id of s.doc.order) if (s.doc.objects[id]?.given) allowed.add(id);
       for (const st of s.doc.steps.slice(0, s.scrub)) st.outputs.forEach((o) => allowed!.add(o));
     }
     const showHidden = s.tool === 'showHide';
@@ -325,11 +317,11 @@ export class Controller {
     }
     if (e.button === 2) return;
 
-    if (s.tool === 'move' && !s.readOnly) {
+    if (s.tool === 'move' || s.readOnly) {
+      // viewers of a shared link can drag too (and restore); taps below stay read-only
       const w = toWorld(this.cam, this.vp(), p.x, p.y);
-      const problem = problemOf(s.doc);
       const tol = tolerances(e.pointerType).point / this.cam.zoom;
-      const id = nearestPoint(this.scene(s), w, tol, (o) => isDraggable(o) && !(problem && o.given));
+      const id = nearestPoint(this.scene(s), w, tol, isDraggable);
       if (id) {
         const g = s.values.get(id) as Vec;
         this.gesture = { k: 'drag', id, dx: g.x - w.x, dy: g.y - w.y, moved: false };
@@ -337,7 +329,7 @@ export class Controller {
         this.setCursor('grabbing');
         return;
       }
-      if (e.shiftKey) {
+      if (e.shiftKey && !s.readOnly) {
         this.gesture = { k: 'box', x0: p.x, y0: p.y, x1: p.x, y1: p.y };
         return;
       }
@@ -482,6 +474,8 @@ export class Controller {
       return;
     }
     const obj = live.override.get(g.id);
+    const before = s.doc.objects[g.id];
+    if (obj && before?.kind === 'point') noteMoved(g.id, before.def);
     if (obj) applyPatch(setObjectsPatch(s.doc, [obj], `Move ${obj.name}`));
     else this.invalidate();
   }
@@ -699,7 +693,6 @@ export class Controller {
       return;
     }
     if (tool.key === 'showHide') {
-      if (problemOf(s.doc) && o.given) return toast('Givens stay visible in a problem', 'info');
       applyPatch(setObjectsPatch(s.doc, [{ ...o, hidden: !o.hidden }], o.hidden ? `Show ${o.name}` : `Hide ${o.name}`));
       return;
     }
@@ -736,11 +729,8 @@ export class Controller {
     let hoverId: Id | null = null;
     const ov: typeof this.overlay = { ghosts: [], pending: [], snap: null, candidates: [], box: this.overlay.box };
 
-    if (s.readOnly) {
-      // viewers only pan and zoom
-    } else if (tool.key === 'move') {
-      const problem = problemOf(s.doc);
-      hoverId = nearestPoint(scene, w, pointTol, (o) => isDraggable(o) && !(problem && o.given));
+    if (tool.key === 'move' || s.readOnly) {
+      hoverId = nearestPoint(scene, w, pointTol, isDraggable);
       this.setCursor(hoverId ? 'grab' : objectAt(scene, w, pointTol, curveTol) ? 'pointer' : 'default');
     } else if (tool.role === 'action') {
       hoverId = objectAt(scene, w, pointTol, curveTol);
@@ -815,10 +805,6 @@ export class Controller {
 export function deleteWithConfirm(ids: Id[]) {
   const s = useApp.getState();
   if (!ids.length) return;
-  if (problemOf(s.doc) && ids.some((id) => s.doc.objects[id]?.given)) {
-    toast('Givens can’t be deleted in a problem', 'info');
-    return;
-  }
   const all = dependentsClosure(s.doc, ids);
   const extra = all.length - ids.length;
   const run = () => {

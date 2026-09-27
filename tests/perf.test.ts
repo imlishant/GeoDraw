@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Scratch } from '../src/engine/scratch';
+import { Scratch } from './scratch';
 import { downstream, evaluateDoc, reevaluate } from '../src/engine/evaluate';
 import type { GeoObject } from '../src/engine/types';
 

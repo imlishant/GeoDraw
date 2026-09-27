@@ -5,7 +5,7 @@ import { contrast, DARK, LIGHT } from '../src/render/theme';
 describe('theme contrast', () => {
   for (const t of [LIGHT, DARK]) {
     it(`${t.name}: objects are clearly visible`, () => {
-      for (const c of [t.given, t.constructed, t.aux, t.accent, ...Object.values(t.colors)]) {
+      for (const c of [t.constructed, t.aux, t.accent, ...Object.values(t.colors)]) {
         expect(contrast(c, t.bg), `${c} on ${t.bg}`).toBeGreaterThanOrEqual(3);
       }
     });

@@ -1,8 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { PROBLEMS } from '../../engine/problems';
 import { clearSession, toast, updateSettings, useApp, type Settings } from '../store';
-import { openLocal, openProblem } from '../actions';
-import { allProgress, deleteLocal, listLocal, type DocSummary, type Progress } from '../persistence/library';
+import { openLocal } from '../actions';
+import { deleteLocal, listLocal, type DocSummary } from '../persistence/library';
 import { cloudEnabled, currentUser, deleteCloud, listCloud, loadCloud, onAuthChange, signInWithEmail, signInWithGoogle, signOut, type CloudUser } from '../persistence/cloud';
 import { loadDoc } from '../store';
 import { Icon } from './Icons';
@@ -35,9 +34,7 @@ export function Dialogs() {
       {dialog === 'settings' && <SettingsDialog onClose={close} />}
       {dialog === 'shortcuts' && <ShortcutsDialog onClose={close} />}
       {dialog === 'library' && <LibraryDialog onClose={close} />}
-      {dialog === 'problems' && <ProblemsDialog onClose={close} />}
       {dialog === 'account' && <AccountDialog onClose={close} />}
-      {dialog === 'about' && <AboutDialog onClose={close} />}
     </>
   );
 }
@@ -245,7 +242,6 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
         if (u) listCloud().then(setCloud).catch(() => setCloud([]));
       });
   }, []);
-  const problemTitle = (id?: string) => (id ? PROBLEMS.find((p) => p.id === id)?.title : undefined);
   return (
     <Dialog title="My constructions" size="wide" onClose={onClose}>
       <p className="muted" style={{ marginTop: 0 }}>
@@ -264,7 +260,6 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
                 {d.id === current && <span className="muted"> · open</span>}
               </div>
               <div className="muted" style={{ fontSize: 12.5 }}>
-                {problemTitle(d.problemId) ? `Problem: ${problemTitle(d.problemId)} · ` : ''}
                 {d.stepCount} steps · {timeAgo(d.updatedAt)}
               </div>
             </div>
@@ -326,37 +321,6 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ProblemsDialog({ onClose }: { onClose: () => void }) {
-  const [progress, setProgress] = useState<Record<string, Progress>>({});
-  useEffect(() => void allProgress().then(setProgress), []);
-  const groups = ['Basics', 'Circles', 'Figures'] as const;
-  return (
-    <Dialog title="Problems" size="wide" onClose={onClose}>
-      <p className="muted" style={{ marginTop: 0 }}>
-        Classic constructions from Euclid’s <em>Elements</em>. Your solution is checked automatically after every step, by moving the givens around to make sure it
-        works in general, not just by eye.
-      </p>
-      {groups.map((g) => (
-        <div key={g}>
-          <div className="group-title">{g}</div>
-          <div className="problem-grid">
-            {PROBLEMS.filter((p) => p.group === g).map((p) => {
-              const pr = progress[p.id];
-              return (
-                <button key={p.id} className="problem-card" data-problem={p.id} onClick={() => void openProblem(p)}>
-                  <span className="t">{p.title}</span>
-                  <span className="s">{p.statement}</span>
-                  {pr?.solved && <span className="solved">Solved ✓</span>}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </Dialog>
-  );
-}
-
 function AccountDialog({ onClose }: { onClose: () => void }) {
   const [user, setUser] = useState<CloudUser | null>(null);
   const [email, setEmail] = useState('');
@@ -403,21 +367,6 @@ function AccountDialog({ onClose }: { onClose: () => void }) {
           )}
         </>
       )}
-    </Dialog>
-  );
-}
-
-function AboutDialog({ onClose }: { onClose: () => void }) {
-  return (
-    <Dialog title="About DrawGeo" onClose={onClose}>
-      <p>
-        A ruler-and-compass construction workspace: Euclidea’s clean feel and scoring, GeoGebra Geometry’s tools behind <strong>More</strong>, and a recorded list of
-        steps so you can see how you solved it.
-      </p>
-      <p>
-        <strong>Points.</strong> Filled points can be dragged; hollow ones are constructed (intersections, midpoints…) and follow along.
-      </p>
-      <p className="muted">Works offline once loaded. Constructions are saved in this browser.</p>
     </Dialog>
   );
 }

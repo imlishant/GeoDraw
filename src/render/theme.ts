@@ -8,7 +8,6 @@ export interface Theme {
   name: 'light' | 'dark';
   // canvas
   bg: string;
-  given: string;
   constructed: string;
   aux: string;
   accent: string; // hover, selection, previews, picked inputs
@@ -31,7 +30,6 @@ export interface Theme {
 export const LIGHT: Theme = {
   name: 'light',
   bg: '#f4f5f7',
-  given: '#16181d',
   constructed: '#565a62',
   aux: '#7b8089',
   accent: '#2463d6',
@@ -53,7 +51,6 @@ export const LIGHT: Theme = {
 export const DARK: Theme = {
   name: 'dark',
   bg: '#15171b',
-  given: '#f1f3f5',
   constructed: '#aeb3bb',
   aux: '#868c96',
   accent: '#6aa7ff',
@@ -72,9 +69,9 @@ export const DARK: Theme = {
   shadow: '0 2px 12px rgba(0, 0, 0, 0.45)',
 };
 
-export function objectColor(t: Theme, token: ColorToken | undefined, given: boolean): string {
+export function objectColor(t: Theme, token: ColorToken | undefined): string {
   if (token && token !== 'default') return t.colors[token];
-  return given ? t.given : t.constructed;
+  return t.constructed;
 }
 
 export function applyThemeVars(t: Theme): void {

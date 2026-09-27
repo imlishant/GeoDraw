@@ -68,7 +68,7 @@ const t = (x: ToolUI) => x;
 
 export const TOOLS: ToolUI[] = [
   // ---- Tier A: Euclidea's bar, in Euclidea's order ----
-  t({ key: 'move', label: 'Move', shortcut: 'V', group: 'main', role: 'nav', next: () => null, hint: () => 'Drag a point to move it · drag the canvas to pan · tap an object to select it' }),
+  t({ key: 'move', label: 'Move', shortcut: 'V', group: 'main', role: 'nav', next: () => null, hint: () => 'Drag points to move them · drag empty space to pan' }),
   t({ key: 'point', label: 'Point', shortcut: 'P', group: 'main', role: 'construct', next: seq(P), hint: () => 'Point: tap anywhere, on a line or circle, or on an intersection' }),
   t({ key: 'line', label: 'Line', shortcut: 'L', group: 'main', role: 'construct', next: seq(P, P), hint: hints('Line: pick the first point', 'Line: pick the second point') }),
   t({ key: 'circle', label: 'Circle', shortcut: 'C', group: 'main', role: 'construct', next: seq(P, P), hint: hints('Circle: pick the center', 'Circle: pick a point on the circle') }),

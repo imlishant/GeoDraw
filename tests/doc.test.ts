@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Scratch } from '../src/engine/scratch';
+import { Scratch } from './scratch';
 import { addStepPatch, commit, deletePatch, emptyHistory, nextName, newDoc, redo, setObjectsPatch, undo } from '../src/engine/doc';
 import { downstream, evaluateDoc } from '../src/engine/evaluate';
 import type { GeoObject, PointObj } from '../src/engine/types';

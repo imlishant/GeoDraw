@@ -17,7 +17,7 @@ const dot = (cx: number, cy: number, r = 1.9, filled = false) => (
 /** A picked point: hollow, drawn on top so lines stop at its rim. */
 const pt = (cx: number, cy: number) => <circle cx={cx} cy={cy} r={2.1} fill="var(--icon-bg, #fff)" stroke="currentColor" strokeWidth={1.35} />;
 /** A point the tool creates: filled. */
-const made = (cx: number, cy: number) => <circle cx={cx} cy={cy} r={2.4} fill="currentColor" stroke="none" />;
+const made = (cx: number, cy: number, r = 2.4) => <circle cx={cx} cy={cy} r={r} fill="currentColor" stroke="none" />;
 const acc = { ...S, stroke: 'var(--accent)' };
 
 const TOOL_ICONS: Record<ToolKey, JSX.Element> = {
@@ -140,10 +140,15 @@ const TOOL_ICONS: Record<ToolKey, JSX.Element> = {
   ),
   regularPolygon: (
     <>
-      <path d="M12 4.2L20.18 10.14L17.05 19.76H6.95L3.82 10.14Z" fill="currentColor" fillOpacity={0.14} stroke="none" />
-      <path {...bold} d="M12 4.2L20.18 10.14L17.05 19.76H6.95L3.82 10.14Z" />
-      {pt(6.95, 19.76)}
-      {pt(17.05, 19.76)}
+      {/* you pick two corners (hollow); the tool creates the rest (filled) */}
+      <path d="M20.5 12L16.25 19.36H7.75L3.5 12L7.75 4.64H16.25Z" fill="currentColor" fillOpacity={0.14} stroke="none" />
+      <path {...bold} d="M20.5 12L16.25 19.36H7.75L3.5 12L7.75 4.64H16.25Z" />
+      {made(20.5, 12, 2)}
+      {made(3.5, 12, 2)}
+      {made(7.75, 4.64, 2)}
+      {made(16.25, 4.64, 2)}
+      {pt(7.75, 19.36)}
+      {pt(16.25, 19.36)}
     </>
   ),
   // ---- More: Circles (new style) ----
@@ -306,6 +311,14 @@ const UI: Record<string, JSX.Element> = {
   ),
   // open book: the steps record (distinct from the ☰ menu)
   steps: <path {...S} d="M12 7v13M12 7c-1.8-1.6-4.6-2.4-8.5-2.4v13c3.9 0 6.7.8 8.5 2.4 1.8-1.6 4.6-2.4 8.5-2.4v-13C16.6 4.6 13.8 5.4 12 7z" />,
+  // restore moved points (Euclidea's reset idea): a center dot with two arrows circling it
+  restorePoints: (
+    <>
+      <circle cx={12} cy={12} r={2.2} fill="currentColor" />
+      <path {...S} strokeWidth={1.8} d="M4.12 10.61A8 8 0 0 1 18.93 8M19.88 13.39A8 8 0 0 1 5.07 16" />
+      <path {...S} strokeWidth={1.8} d="M15.9 6.75L18.93 8l.43-3.25M8.1 17.25L5.07 16l-.43 3.25" />
+    </>
+  ),
   sun: (
     <>
       <circle {...S} cx={12} cy={12} r={4} />

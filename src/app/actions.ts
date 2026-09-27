@@ -1,12 +1,11 @@
 import type { Doc } from '../engine/types';
 import { newDoc, newId } from '../engine/doc';
 import { docToJSON, FILE_EXT, parseDoc } from '../engine/serialize';
-import { problemDoc, type Problem } from '../engine/problems';
 import { exportPNG, exportSVG, extractFromPng, extractFromSvg } from '../render/export';
 import { controller } from './controller';
 import { stepsAsText } from './describe';
-import { loadDoc, problemOf, toast, useApp } from './store';
-import { getProgress, loadLocal, lsSet, saveLocal } from './persistence/library';
+import { loadDoc, toast, useApp } from './store';
+import { loadLocal, lsSet, saveLocal } from './persistence/library';
 import { shareUrl } from './persistence/share';
 import { formatNumber } from './format';
 import { measureValue } from '../engine/measure';
@@ -38,28 +37,6 @@ export async function openLocal(id: string) {
   if (!d) return toast('That construction could not be found', 'error');
   loadDoc(d);
   lsSet('drawgeo.current', d.id);
-}
-
-export async function openProblem(p: Problem) {
-  const prog = await getProgress(p.id);
-  const prev = prog?.docId ? await loadLocal(prog.docId) : undefined;
-  const d = prev && prev.problemId === p.id ? prev : problemDoc(p);
-  loadDoc(d);
-  lsSet('drawgeo.current', d.id);
-  history.replaceState(null, '', location.pathname);
-  useApp.setState({ dialog: null });
-}
-
-export function restartProblem() {
-  const p = problemOf(useApp.getState().doc);
-  if (!p) return;
-  const d = problemDoc(p);
-  loadDoc(d);
-  lsSet('drawgeo.current', d.id);
-}
-
-export function exitProblem() {
-  newConstruction();
 }
 
 /** A shared (read-only) construction becomes your own editable copy. */

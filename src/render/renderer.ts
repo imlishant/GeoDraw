@@ -89,9 +89,9 @@ export class Renderer {
       else if (g.k === 'circle') strokeCircle(ctx, this.vp, o.cam, g);
     }
     ctx.setLineDash([]);
-    for (const g of o.ghosts) if (g.k === 'point') drawPointShape(ctx, toScreen(o.cam, this.vp, g.x, g.y), false, t.accent, t.bg, o.coarse, false);
+    for (const g of o.ghosts) if (g.k === 'point') drawPointShape(ctx, toScreen(o.cam, this.vp, g.x, g.y), false, t.accent, t.bg, o.coarse);
     ctx.globalAlpha = 1;
-    for (const p of o.pending) drawPointShape(ctx, toScreen(o.cam, this.vp, p.x, p.y), true, t.accent, t.bg, o.coarse, false);
+    for (const p of o.pending) drawPointShape(ctx, toScreen(o.cam, this.vp, p.x, p.y), true, t.accent, t.bg, o.coarse);
     ctx.globalAlpha = 0.7;
     for (const c of o.candidates) {
       const s = toScreen(o.cam, this.vp, c.x, c.y);
@@ -140,7 +140,7 @@ export function drawConstruction(ctx: CanvasRenderingContext2D, vp: Viewport, s:
     if (g.k !== 'region' || g.pts.length < 3) continue;
     ctx.save();
     ctx.globalAlpha = s.faint(o) ? 0.04 : 0.1;
-    ctx.fillStyle = s.highlight.has(o.id) ? t.accent : objectColor(t, o.style?.color, !!o.given);
+    ctx.fillStyle = s.highlight.has(o.id) ? t.accent : objectColor(t, o.style?.color);
     ctx.beginPath();
     g.pts.forEach((p, i) => {
       const q = toScreen(s.cam, vp, p.x, p.y);
@@ -157,8 +157,8 @@ export function drawConstruction(ctx: CanvasRenderingContext2D, vp: Viewport, s:
     if (g.k !== 'line' && g.k !== 'circle') continue;
     const hi = s.highlight.has(o.id);
     ctx.save();
-    ctx.strokeStyle = hi ? t.accent : objectColor(t, o.style?.color, !!o.given);
-    ctx.lineWidth = (o.given ? 2 : 1.4) + (hi ? 1.2 : 0);
+    ctx.strokeStyle = hi ? t.accent : objectColor(t, o.style?.color);
+    ctx.lineWidth = 1.4 + (hi ? 1.2 : 0);
     if (o.style?.dashed) ctx.setLineDash([7, 5]);
     if (s.faint(o)) ctx.globalAlpha = 0.3;
     if (g.k === 'line') {
@@ -202,8 +202,8 @@ export function drawConstruction(ctx: CanvasRenderingContext2D, vp: Viewport, s:
     if (p.x < -20 || p.y < -20 || p.x > vp.w + 20 || p.y > vp.h + 20) continue;
     ctx.save();
     if (s.faint(o)) ctx.globalAlpha = 0.35;
-    const color = hi ? t.accent : objectColor(t, o.style?.color, !!o.given);
-    drawPointShape(ctx, p, isDraggable(o), color, t.bg, s.coarse, !!o.given);
+    const color = hi ? t.accent : objectColor(t, o.style?.color);
+    drawPointShape(ctx, p, isDraggable(o), color, t.bg, s.coarse);
     ctx.restore();
   }
 
@@ -230,8 +230,8 @@ export function isDraggable(o: GeoObject): boolean {
   return o.kind === 'point' && (o.def.t === 'free' || o.def.t === 'on' || o.def.t === 'polar');
 }
 
-function drawPointShape(ctx: CanvasRenderingContext2D, p: Vec, filled: boolean, color: string, bg: string, coarse: boolean, given: boolean) {
-  const r = (coarse ? 5 : 4.2) + (given ? 0.4 : 0);
+function drawPointShape(ctx: CanvasRenderingContext2D, p: Vec, filled: boolean, color: string, bg: string, coarse: boolean) {
+  const r = coarse ? 5 : 4.2;
   ctx.beginPath();
   ctx.arc(p.x, p.y, r + 2, 0, Math.PI * 2);
   ctx.fillStyle = bg; // halo keeps points readable on top of lines
@@ -240,7 +240,7 @@ function drawPointShape(ctx: CanvasRenderingContext2D, p: Vec, filled: boolean, 
   ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
   ctx.fillStyle = filled ? color : bg;
   ctx.fill();
-  ctx.lineWidth = given ? 2 : 1.6;
+  ctx.lineWidth = 1.6;
   ctx.strokeStyle = color;
   ctx.stroke();
 }

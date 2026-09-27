@@ -256,17 +256,11 @@ button:disabled {
 .banner strong {
   font-weight: 800;
 }
-.banner.solved {
-  border-color: var(--success);
-}
-.banner .solved-tag {
-  color: var(--success);
-  font-weight: 800;
-}
 
 /* ---- toolbar ---- */
 .bottom {
   position: absolute;
+  z-index: 16;
   left: 0;
   right: 0;
   bottom: calc(14px + var(--safe-b));
@@ -291,6 +285,8 @@ button:disabled {
   pointer-events: none;
 }
 .toolbar {
+  position: relative;
+  z-index: 15; /* above the More backdrop, so ⋯ and the bar stay tappable */
   display: flex;
   gap: 7px;
   padding: 2px 12px;
@@ -421,11 +417,55 @@ button:disabled {
   line-height: 1.2;
   text-align: center;
 }
-.more-item .pinned {
+.more-cell {
+  position: relative;
+}
+.pin-btn {
   position: absolute;
-  top: 4px;
-  right: 6px;
+  top: 2px;
+  right: 2px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-muted);
+  opacity: 0.55;
+  padding: 0;
+}
+.pin-btn:hover {
+  background: var(--btn-hover);
+  opacity: 1;
+}
+.pin-btn.on {
   color: var(--accent);
+  opacity: 1;
+}
+.pin-btn.on svg path {
+  fill: currentColor;
+}
+.more-close {
+  border: none;
+  background: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  padding: 0;
+}
+.more-close:hover {
+  background: var(--btn-hover);
+}
+/* catches taps outside the drawer: closes it without acting on the canvas */
+.more-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+  pointer-events: auto;
 }
 .more-foot {
   padding: 8px 14px;
@@ -437,6 +477,11 @@ button:disabled {
 .steps-btn {
   position: absolute;
   left: calc(14px + var(--safe-l));
+  bottom: calc(14px + var(--safe-b));
+}
+.restore-btn {
+  position: absolute;
+  left: calc(14px + 44px + 10px + var(--safe-l));
   bottom: calc(14px + var(--safe-b));
 }
 .drawer {
@@ -800,37 +845,6 @@ button:disabled {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.problem-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 10px;
-}
-.problem-card {
-  text-align: left;
-  border: 1px solid var(--panel-border);
-  background: var(--panel);
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.problem-card:hover {
-  background: var(--btn-hover);
-}
-.problem-card .t {
-  font-weight: 800;
-}
-.problem-card .solved {
-  color: var(--success);
-  font-weight: 800;
-  font-size: 13px;
-}
-.problem-card .s {
-  font-size: 12.5px;
-  color: var(--text-muted);
-  line-height: 1.35;
-}
 .group-title {
   margin: 14px 0 8px;
   font-size: 12px;
@@ -903,8 +917,14 @@ kbd {
   .zoom {
     display: none;
   }
+  /* side buttons sit above the hint line, which can wrap to two lines on phones */
   .steps-btn {
-    bottom: calc(var(--btn) + 58px + var(--safe-b));
+    bottom: calc(var(--btn) + 84px + var(--safe-b));
+  }
+  .restore-btn {
+    left: auto;
+    right: calc(14px + var(--safe-r));
+    bottom: calc(var(--btn) + 84px + var(--safe-b));
   }
   .drawer,
   .more {
@@ -925,8 +945,11 @@ kbd {
     grid-template-columns: 1fr;
     gap: 4px;
   }
-  .more-item {
+  .more-cell {
     width: calc(33.33% - 4px);
+  }
+  .more-cell .more-item {
+    width: 100%;
   }
   .scrim {
     align-items: end;

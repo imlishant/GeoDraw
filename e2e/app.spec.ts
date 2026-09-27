@@ -108,33 +108,6 @@ test('dragging a free point moves everything built on it', async ({ page, isMobi
   await expectSteps(page, 1); // moving is not a step
 });
 
-test('problem mode: solving Equilateral triangle is detected', async ({ page }) => {
-  await fresh(page);
-  await page.getByRole('button', { name: 'Menu' }).click();
-  await page.getByRole('menuitem', { name: 'Problems…' }).click();
-  await page.locator('[data-problem="equilateral"]').click();
-  await expect(page.getByTestId('problem-banner')).toContainText('Equilateral triangle');
-  const g = await page.evaluate(() => {
-    const s = (window as any).__drawgeo.useApp.getState();
-    const v = (n: string) => s.values.get(s.doc.problemGivens[n]);
-    return { A: v('A'), B: v('B') };
-  });
-  const apex = { x: (g.A.x + g.B.x) / 2, y: g.A.y + (Math.sqrt(3) / 2) * (g.B.x - g.A.x) };
-  await tool(page, 'circle');
-  await tap(page, g.A.x, g.A.y);
-  await tap(page, g.B.x, g.B.y);
-  await tap(page, g.B.x, g.B.y);
-  await tap(page, g.A.x, g.A.y);
-  await tool(page, 'line');
-  await tap(page, g.A.x, g.A.y);
-  await tap(page, apex.x, apex.y); // creates the intersection point implicitly
-  await expect(page.getByTestId('problem-banner')).not.toContainText('Solved');
-  await tap(page, g.B.x, g.B.y);
-  await tap(page, apex.x, apex.y);
-  await expect(page.getByTestId('problem-banner')).toContainText('Solved ✓');
-  await page.screenshot({ path: `test-results/problem-${test.info().project.name}.png` });
-});
-
 test('More drawer: search, pick a tool, measure live', async ({ page }) => {
   await fresh(page);
   await page.locator('[data-tool="more"]').click();
@@ -206,4 +179,38 @@ test('theme switch in the top bar flips light ↔ dark and is remembered', async
   await expect(page.locator('html')).toHaveAttribute('data-theme', after);
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', after);
+});
+
+test('More drawer closes without choosing a tool: ✕, tapping outside (nothing gets drawn), Esc', async ({ page, isMobile }) => {
+  await fresh(page);
+  await tool(page, 'circle');
+  const more = page.getByRole('dialog', { name: 'More tools' });
+  await page.locator('[data-tool="more"]').click();
+  await more.getByRole('button', { name: 'Close' }).click();
+  await expect(more).toHaveCount(0);
+  await page.locator('[data-tool="more"]').click();
+  const p = await screen(page, 0, 150);
+  if (isMobile) await page.touchscreen.tap(p.x, 40);
+  else await page.mouse.click(p.x, 40);
+  await expect(more).toHaveCount(0);
+  await expectSteps(page, 0); // the outside tap did not act as a Circle click
+  expect(await page.evaluate(() => (window as any).__drawgeo.useApp.getState().session.picks.length)).toBe(0);
+  if (!isMobile) {
+    await page.locator('[data-tool="more"]').click();
+    await page.keyboard.press('Escape');
+    await expect(more).toHaveCount(0);
+  }
+  await expect(page.locator('.toolbar [data-tool="circle"]')).toHaveAttribute('aria-pressed', 'true'); // tool unchanged
+});
+
+test('pin button pins/unpins a More tool without selecting it', async ({ page }) => {
+  await fresh(page);
+  await page.locator('[data-tool="more"]').click();
+  const more = page.getByRole('dialog', { name: 'More tools' });
+  await more.locator('[data-pin="tangents"]').click();
+  await expect(more).toBeVisible(); // still open: pinning is not choosing
+  await expect(page.locator('.toolbar [data-tool="tangents"]')).toBeVisible();
+  await expect(page.locator('.toolbar [data-tool="move"]')).toHaveAttribute('aria-pressed', 'true');
+  await more.locator('[data-pin="tangents"]').click();
+  await expect(page.locator('.toolbar [data-tool="tangents"]')).toHaveCount(0);
 });

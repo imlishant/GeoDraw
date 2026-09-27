@@ -5,16 +5,8 @@ export interface DocSummary {
   id: string;
   title: string;
   updatedAt: number;
-  problemId?: string;
   objectCount: number;
   stepCount: number;
-}
-
-export interface Progress {
-  problemId: string;
-  solved: boolean;
-  docId?: string;
-  updatedAt: number;
 }
 
 export async function saveLocal(doc: Doc): Promise<void> {
@@ -37,7 +29,7 @@ export async function listLocal(): Promise<DocSummary[]> {
   try {
     const all = await idbAll<Doc>('docs');
     return all
-      .map((d) => ({ id: d.id, title: d.title, updatedAt: d.updatedAt, problemId: d.problemId, objectCount: d.order.length, stepCount: d.steps.length }))
+      .map((d) => ({ id: d.id, title: d.title, updatedAt: d.updatedAt, objectCount: d.order.length, stepCount: d.steps.length }))
       .sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
@@ -47,42 +39,6 @@ export async function listLocal(): Promise<DocSummary[]> {
 export async function deleteLocal(id: string): Promise<void> {
   try {
     await idbDelete('docs', id);
-  } catch {
-    /* ignore */
-  }
-}
-
-export async function getProgress(problemId: string): Promise<Progress | undefined> {
-  try {
-    return await idbGet<Progress>('progress', problemId);
-  } catch {
-    return undefined;
-  }
-}
-
-export async function allProgress(): Promise<Record<string, Progress>> {
-  try {
-    const all = await idbAll<Progress>('progress');
-    return Object.fromEntries(all.map((p) => [p.problemId, p]));
-  } catch {
-    return {};
-  }
-}
-
-export async function recordSolve(problemId: string, docId: string): Promise<Progress> {
-  const next: Progress = { problemId, solved: true, docId, updatedAt: Date.now() };
-  try {
-    await idbPut('progress', next);
-  } catch {
-    /* ignore */
-  }
-  return next;
-}
-
-export async function rememberAttempt(problemId: string, docId: string): Promise<void> {
-  const prev = await getProgress(problemId);
-  try {
-    await idbPut('progress', { problemId, solved: prev?.solved ?? false, docId, updatedAt: Date.now() });
   } catch {
     /* ignore */
   }

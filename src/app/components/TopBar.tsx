@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { doRedo, doUndo, problemOf, setTitle, updateSettings, useApp } from '../store';
+import { doRedo, doUndo, setTitle, updateSettings, useApp } from '../store';
 import { Icon } from './Icons';
-import { copyShareLink, exitProblem, exportImage, exportJSON, exportStepsText, makeCopy, newConstruction, pickFileToImport, restartProblem } from '../actions';
+import { copyShareLink, exportImage, exportJSON, exportStepsText, makeCopy, newConstruction, pickFileToImport } from '../actions';
 import { cloudEnabled } from '../persistence/cloud';
 
 export function TopBar() {
@@ -12,7 +12,6 @@ export function TopBar() {
   const menuOpen = useApp((s) => s.menuOpen);
   const [title, setT] = useState(doc.title);
   useEffect(() => setT(doc.title), [doc.title]);
-  const problem = problemOf(doc);
 
   return (
     <>
@@ -25,7 +24,7 @@ export function TopBar() {
             className="title-input"
             value={title}
             aria-label="Construction name"
-            readOnly={readOnly || !!problem}
+            readOnly={readOnly}
             onChange={(e) => setT(e.target.value)}
             onBlur={() => setTitle(title.trim() || 'Untitled construction')}
             onKeyDown={(e) => {
@@ -34,7 +33,6 @@ export function TopBar() {
           />
         </div>
         <div className="topbar-center">
-          {problem && <ProblemBanner />}
           {readOnly && <SharedBanner />}
         </div>
         <div className="topbar-right">
@@ -49,26 +47,6 @@ export function TopBar() {
       </div>
       {menuOpen && <Menu />}
     </>
-  );
-}
-
-function ProblemBanner() {
-  const doc = useApp((s) => s.doc);
-  const solved = useApp((s) => s.solved);
-  const p = problemOf(doc)!;
-  return (
-    <div className={`panel banner${solved ? ' solved' : ''}`} data-testid="problem-banner">
-      <span>
-        <strong>{p.title}.</strong> {p.statement}
-      </span>
-      {solved && <span className="solved-tag">Solved ✓</span>}
-      <button className="chip" onClick={restartProblem}>
-        Restart
-      </button>
-      <button className="chip" onClick={exitProblem}>
-        Exit
-      </button>
-    </div>
   );
 }
 
@@ -91,7 +69,7 @@ function Menu() {
     fn();
   };
   const readOnly = useApp((s) => s.readOnly);
-  const open = (dialog: 'library' | 'problems' | 'settings' | 'shortcuts' | 'account' | 'about') => close(() => useApp.setState({ dialog }));
+  const open = (dialog: 'library' | 'settings' | 'shortcuts' | 'account') => close(() => useApp.setState({ dialog }));
   return (
     <div className="panel menu" role="menu">
       <button role="menuitem" onClick={close(newConstruction)}>
@@ -99,9 +77,6 @@ function Menu() {
       </button>
       <button role="menuitem" onClick={open('library')}>
         My constructions…
-      </button>
-      <button role="menuitem" onClick={open('problems')}>
-        Problems…
       </button>
       <hr />
       <button role="menuitem" onClick={close(pickFileToImport)}>
@@ -138,9 +113,6 @@ function Menu() {
       </button>
       <button role="menuitem" onClick={open('shortcuts')}>
         Keyboard shortcuts
-      </button>
-      <button role="menuitem" onClick={open('about')}>
-        About DrawGeo
       </button>
     </div>
   );

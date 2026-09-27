@@ -227,13 +227,12 @@ function ObjectsTab() {
             onMouseEnter={() => useApp.setState({ stepHover: [id] })}
             onMouseLeave={() => useApp.setState({ stepHover: [] })}
           >
-            <span className="swatch" style={{ background: objectColor(controller.theme, o.style?.color, !!o.given) }} />
+            <span className="swatch" style={{ background: objectColor(controller.theme, o.style?.color) }} />
             <span className="desc">
               <em>{o.name}</em> <span className="def">{defSummary(o, name)}</span>
-              {o.given && <span className="def"> · given</span>}
               {undef && <span className="def"> · undefined here</span>}
             </span>
-            {!readOnly && !o.given && (
+            {!readOnly && (
               <span className="row-actions">
                 <button
                   aria-label={o.hidden ? `Show ${o.name}` : `Hide ${o.name}`}

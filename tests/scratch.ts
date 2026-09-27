@@ -1,11 +1,11 @@
-// A small mutable builder over a Doc. Used for problem givens, reference
-// solutions, macros and tests. The UI never uses it (the UI goes through patches).
+// A small mutable builder over a Doc, for tests and macros. The app itself goes
+// through patches (engine/doc.ts), never through this.
 
-import type { Clip, Doc, Geo, GeoObject, Id, ToolId, Values, Vec } from './types';
-import { evalObject } from './evaluate';
-import { newDoc, newId, nextName } from './doc';
-import { roots } from './intersect';
-import { build } from './build';
+import type { Clip, Doc, Geo, GeoObject, Id, ToolId, Values, Vec } from '../src/engine/types';
+import { evalObject } from '../src/engine/evaluate';
+import { newDoc, newId, nextName } from '../src/engine/doc';
+import { roots } from '../src/engine/intersect';
+import { build } from '../src/engine/build';
 
 export class Scratch {
   doc: Doc;
