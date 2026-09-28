@@ -67,7 +67,6 @@ export interface AppState {
   confirm: ConfirmState | null;
   toasts: Toast[];
   lastMore: ToolKey | null;
-  zoom: number;
   scrub: number | null; // replay: show only the first n steps
   stepHover: Id[];
   readOnly: boolean;
@@ -98,7 +97,6 @@ export const useApp = create<AppState>(() => ({
   confirm: null,
   toasts: [],
   lastMore: null,
-  zoom: 1,
   scrub: null,
   stepHover: [],
   readOnly: false,

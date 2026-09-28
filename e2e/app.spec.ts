@@ -203,14 +203,17 @@ test('More drawer closes without choosing a tool: ✕, tapping outside (nothing 
   await expect(page.locator('.toolbar [data-tool="circle"]')).toHaveAttribute('aria-pressed', 'true'); // tool unchanged
 });
 
-test('pin button pins/unpins a More tool without selecting it', async ({ page }) => {
+test('right-click pins/unpins a More tool without selecting it', async ({ page, isMobile }) => {
+  test.skip(!!isMobile, 'touch uses long-press (touch.spec)');
   await fresh(page);
   await page.locator('[data-tool="more"]').click();
   const more = page.getByRole('dialog', { name: 'More tools' });
-  await more.locator('[data-pin="tangents"]').click();
-  await expect(more).toBeVisible(); // still open: pinning is not choosing
+  await expect(more.locator('.pinned')).toHaveCount(0); // no pin marks until something is pinned
+  await more.locator('[data-tool="tangents"]').click({ button: 'right' });
+  await expect(more).toBeVisible(); // pinning is not choosing
   await expect(page.locator('.toolbar [data-tool="tangents"]')).toBeVisible();
+  await expect(more.locator('[data-tool="tangents"] .pinned')).toHaveCount(1);
   await expect(page.locator('.toolbar [data-tool="move"]')).toHaveAttribute('aria-pressed', 'true');
-  await more.locator('[data-pin="tangents"]').click();
+  await more.locator('[data-tool="tangents"]').click({ button: 'right' });
   await expect(page.locator('.toolbar [data-tool="tangents"]')).toHaveCount(0);
 });

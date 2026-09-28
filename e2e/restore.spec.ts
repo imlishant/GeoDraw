@@ -57,6 +57,8 @@ test('appears only after a drag changes the figure, and puts points back to wher
   await drag(page, [100, 40], [140, -30]); // same point again: the original must be kept
   await drag(page, [-60, 0], [-90, 20]);
   await expect(restore(page)).toBeVisible();
+  const rb = (await restore(page).boundingBox())!;
+  expect(rb.x).toBeGreaterThan(page.viewportSize()!.width * 0.75); // bottom-right on desktop too
   await restore(page).click();
   expect(await pointAt(page, 'A')).toEqual([-60, 0]);
   expect(await pointAt(page, 'B')).toEqual([60, 0]);

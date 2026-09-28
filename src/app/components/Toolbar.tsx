@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { isToolAllowed, setTool, toast, togglePin, useApp } from '../store';
 import { MAIN_BAR, MAX_PINS, MORE_GROUPS, TOOL_BY_KEY, TOOLS, type ToolKey, type ToolUI } from '../tools';
 import { Icon, ToolIcon } from './Icons';
+import { StepsButton } from './StepsDrawer';
+import { RestoreButton } from './Chrome';
 
 function tooltip(t: ToolUI) {
   return `${t.label}${t.shortcut ? ` (${t.shortcut})` : ''}`;
@@ -40,8 +42,14 @@ export function Toolbar() {
 
   return (
     <div className="bottom">
-      <div className="hint" data-testid="hint" aria-live="polite">
-        {hint}
+      {/* book · hint · restore: one row in normal flow, so on short phone screens the
+          side buttons can never slide behind the tools (desktop pins them bottom-left) */}
+      <div className="bottom-row">
+        <StepsButton />
+        <div className="hint" data-testid="hint" aria-live="polite">
+          {hint}
+        </div>
+        <RestoreButton />
       </div>
       <div className="toolbar" role="toolbar" aria-label="Tools">
         {MAIN_BAR.map(btn)}
@@ -96,36 +104,69 @@ function MoreDrawer() {
     const now = useApp.getState().settings.pins.includes(t.key);
     if (was !== now) toast(now ? `${t.label} pinned to the bar` : `${t.label} unpinned`, 'info', 1800);
   };
+
+  // Long-press (touch/pen) pins. It must not ALSO select the tool when the finger lifts,
+  // and scrolling the drawer must not trigger it.
+  const press = useRef<{ key: ToolKey; x: number; y: number; timer: number } | null>(null);
+  const pinnedByPress = useRef<ToolKey | null>(null);
+  const lastPointer = useRef('mouse');
+  const cancelPress = () => {
+    if (press.current) clearTimeout(press.current.timer);
+    press.current = null;
+  };
+
   const item = (t: ToolUI) => {
     const allowed = isToolAllowed(t.key);
     const pinned = pins.includes(t.key);
     return (
-      <div key={t.key} className="more-cell">
-        <button
-          className={`more-item${tool === t.key ? ' active' : ''}`}
-          data-tool={t.key}
-          disabled={!allowed}
-          title={tooltip(t)}
-          onClick={() => setTool(t.key)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            pin(t);
-          }}
-        >
-          <ToolIcon tool={t.key} size={26} />
-          <span className="name">{t.label}</span>
-        </button>
-        <button
-          className={`pin-btn${pinned ? ' on' : ''}`}
-          aria-label={pinned ? `Unpin ${t.label}` : `Pin ${t.label} to the bar`}
-          aria-pressed={pinned}
-          title={pinned ? 'Unpin from the bar' : 'Pin to the bar'}
-          data-pin={t.key}
-          onClick={() => pin(t)}
-        >
-          <Icon name="pin" size={14} />
-        </button>
-      </div>
+      <button
+        key={t.key}
+        className={`more-item${tool === t.key ? ' active' : ''}`}
+        data-tool={t.key}
+        disabled={!allowed}
+        title={`${tooltip(t)} · right-click or long-press to ${pinned ? 'unpin' : 'pin'}`}
+        onPointerDown={(e) => {
+          lastPointer.current = e.pointerType;
+          if (e.pointerType === 'mouse') return;
+          cancelPress();
+          press.current = {
+            key: t.key,
+            x: e.clientX,
+            y: e.clientY,
+            timer: window.setTimeout(() => {
+              press.current = null;
+              pinnedByPress.current = t.key;
+              navigator.vibrate?.(12);
+              pin(t);
+            }, 500),
+          };
+        }}
+        onPointerMove={(e) => {
+          if (press.current && Math.hypot(e.clientX - press.current.x, e.clientY - press.current.y) > 8) cancelPress();
+        }}
+        onPointerUp={cancelPress}
+        onPointerCancel={cancelPress}
+        onPointerLeave={cancelPress}
+        onClick={() => {
+          if (pinnedByPress.current === t.key) {
+            pinnedByPress.current = null; // that press pinned; it doesn't choose the tool
+            return;
+          }
+          setTool(t.key);
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (lastPointer.current === 'mouse') pin(t); // touch long-press is handled by the timer
+        }}
+      >
+        {pinned && (
+          <span className="pinned" aria-label="pinned">
+            <Icon name="pin" size={12} />
+          </span>
+        )}
+        <ToolIcon tool={t.key} size={26} />
+        <span className="name">{t.label}</span>
+      </button>
     );
   };
 
@@ -162,7 +203,7 @@ function MoreDrawer() {
         })}
         {!matches.length && <div className="empty">No tool matches “{q}”.</div>}
       </div>
-      <div className="more-foot muted">Tap the pin on a tool to keep it on the bar (up to {MAX_PINS}).</div>
+      <div className="more-foot muted">Long-press (or right-click) a tool to keep it on the bar, up to {MAX_PINS}.</div>
     </div>
   );
 }

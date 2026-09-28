@@ -273,16 +273,54 @@ button:disabled {
 .bottom > * {
   pointer-events: auto;
 }
+/* book · hint · restore */
+.bottom-row {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0 calc(12px + var(--safe-r)) 0 calc(12px + var(--safe-l));
+  pointer-events: none;
+}
+.bottom-row > * {
+  pointer-events: auto;
+}
+.bottom-row .steps-btn {
+  grid-column: 1;
+}
+.bottom-row .hint {
+  grid-column: 2;
+  justify-self: center;
+}
+.bottom-row .restore-btn {
+  grid-column: 3;
+}
+/* desktop & tablet: book in the bottom-left corner, restore in the bottom-right (same sides as on phones) */
+@media (min-width: 600px) {
+  .bottom-row .steps-btn,
+  .bottom-row .restore-btn {
+    position: fixed;
+    bottom: calc(14px + var(--safe-b));
+  }
+  .bottom-row .steps-btn {
+    left: calc(14px + var(--safe-l));
+  }
+  .bottom-row .restore-btn {
+    right: calc(14px + var(--safe-r));
+  }
+}
 .hint {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-muted);
+  background: var(--bg); /* iOS 15 (iPhone 7) has no color-mix */
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   padding: 4px 12px;
   border-radius: 999px;
-  max-width: calc(100vw - 24px);
+  max-width: 100%;
   text-align: center;
-  pointer-events: none;
+  pointer-events: none !important;
 }
 .toolbar {
   position: relative;
@@ -387,6 +425,7 @@ button:disabled {
   gap: 6px;
 }
 .more-item {
+  -webkit-touch-callout: none; /* no iOS callout on long-press */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -417,33 +456,13 @@ button:disabled {
   line-height: 1.2;
   text-align: center;
 }
-.more-cell {
-  position: relative;
-}
-.pin-btn {
+.more-item .pinned {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border: none;
-  border-radius: 8px;
-  background: none;
-  color: var(--text-muted);
-  opacity: 0.55;
-  padding: 0;
-}
-.pin-btn:hover {
-  background: var(--btn-hover);
-  opacity: 1;
-}
-.pin-btn.on {
+  top: 4px;
+  right: 6px;
   color: var(--accent);
-  opacity: 1;
 }
-.pin-btn.on svg path {
+.more-item .pinned svg path {
   fill: currentColor;
 }
 .more-close {
@@ -474,16 +493,6 @@ button:disabled {
 }
 
 /* ---- steps drawer ---- */
-.steps-btn {
-  position: absolute;
-  left: calc(14px + var(--safe-l));
-  bottom: calc(14px + var(--safe-b));
-}
-.restore-btn {
-  position: absolute;
-  left: calc(14px + 44px + 10px + var(--safe-l));
-  bottom: calc(14px + var(--safe-b));
-}
 .drawer {
   position: absolute;
   left: calc(12px + var(--safe-l));
@@ -611,40 +620,6 @@ button:disabled {
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   color: var(--measure);
-}
-
-/* ---- zoom ---- */
-.zoom {
-  position: absolute;
-  right: calc(14px + var(--safe-r));
-  bottom: calc(14px + var(--safe-b));
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 999px;
-}
-.zoom button {
-  background: none;
-  border: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--text-muted);
-}
-.zoom button:hover {
-  background: var(--btn-hover);
-}
-.zoom .pct {
-  width: auto;
-  padding: 0 6px;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  min-width: 52px;
 }
 
 /* ---- popover ---- */
@@ -914,18 +889,6 @@ kbd {
     justify-content: flex-start;
     width: 100%;
   }
-  .zoom {
-    display: none;
-  }
-  /* side buttons sit above the hint line, which can wrap to two lines on phones */
-  .steps-btn {
-    bottom: calc(var(--btn) + 84px + var(--safe-b));
-  }
-  .restore-btn {
-    left: auto;
-    right: calc(14px + var(--safe-r));
-    bottom: calc(var(--btn) + 84px + var(--safe-b));
-  }
   .drawer,
   .more {
     left: 0;
@@ -945,11 +908,8 @@ kbd {
     grid-template-columns: 1fr;
     gap: 4px;
   }
-  .more-cell {
+  .more-item {
     width: calc(33.33% - 4px);
-  }
-  .more-cell .more-item {
-    width: 100%;
   }
   .scrim {
     align-items: end;

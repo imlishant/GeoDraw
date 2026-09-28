@@ -2,10 +2,10 @@ import { useEffect } from 'react';
 import { CanvasView } from './components/CanvasView';
 import { TopBar } from './components/TopBar';
 import { Toolbar } from './components/Toolbar';
-import { StepsButton, StepsDrawer } from './components/StepsDrawer';
+import { StepsDrawer } from './components/StepsDrawer';
 import { SelectionPopover } from './components/Popover';
 import { Dialogs } from './components/Dialogs';
-import { RestoreButton, Toasts, ZoomControls } from './components/Chrome';
+import { Toasts } from './components/Chrome';
 import { controller, deleteWithConfirm } from './controller';
 import { clearSession, doRedo, doUndo, loadDoc, setTool, toast, useApp } from './store';
 import { applyThemeVars, DARK, LIGHT } from '../render/theme';
@@ -171,11 +171,8 @@ export function App() {
     <div className="app">
       <CanvasView />
       <TopBar />
-      <StepsButton />
-      <RestoreButton />
       <StepsDrawer />
       <Toolbar />
-      <ZoomControls />
       <SelectionPopover />
       <Toasts />
       <Dialogs />

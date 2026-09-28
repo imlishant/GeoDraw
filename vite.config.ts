@@ -21,6 +21,8 @@ export default defineConfig({
       workbox: { globPatterns: ['**/*.{js,css,html,svg,woff2}'] },
     }),
   ],
+  // iPhone 7 can't update past iOS 15, so keep the output runnable on Safari 15.
+  build: { target: ['es2020', 'safari15', 'chrome100', 'firefox100'] },
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',

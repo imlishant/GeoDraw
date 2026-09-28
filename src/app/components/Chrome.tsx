@@ -1,5 +1,4 @@
 import { movedIds, restoreMoved, useApp } from '../store';
-import { controller } from '../controller';
 import { Icon } from './Icons';
 
 export function Toasts() {
@@ -11,23 +10,6 @@ export function Toasts() {
           {t.text}
         </div>
       ))}
-    </div>
-  );
-}
-
-export function ZoomControls() {
-  const zoom = useApp((s) => s.zoom);
-  return (
-    <div className="panel zoom" role="group" aria-label="Zoom">
-      <button aria-label="Zoom out" title="Zoom out (−)" onClick={() => controller.zoomBy(1 / 1.25)}>
-        <Icon name="minus" size={18} />
-      </button>
-      <button className="pct" title="Zoom to fit (1)" aria-label="Zoom to fit" onClick={() => controller.zoomToFit()}>
-        {Math.round(zoom * 100)}%
-      </button>
-      <button aria-label="Zoom in" title="Zoom in (+)" onClick={() => controller.zoomBy(1.25)}>
-        <Icon name="plus" size={18} />
-      </button>
     </div>
   );
 }

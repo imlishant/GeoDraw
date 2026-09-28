@@ -158,7 +158,6 @@ export class Controller {
   setCam(c: Camera) {
     const s = useApp.getState();
     this.cam = clampPan(c, this.vp(), boundingBox(s.doc, s.values));
-    if (s.zoom !== this.cam.zoom) useApp.setState({ zoom: this.cam.zoom });
     this.invalidate();
   }
 

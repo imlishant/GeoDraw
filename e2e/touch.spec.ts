@@ -48,13 +48,11 @@ test('one finger drags a point; two fingers pinch-zoom', async ({ page }) => {
     return [...s.values.values()].find((g: any) => g?.k === 'circle').r;
   });
   expect(r).toBeGreaterThan(110);
-  // restore button: bottom-right on phones (opposite the book), bottom-left next to it on tablets
+  // restore button: bottom-right on every device (opposite the book)
   const rb = page.getByTestId('restore-moved');
   await expect(rb).toBeVisible();
   const box = (await rb.boundingBox())!;
-  const vw = page.viewportSize()!.width;
-  if (vw < 600) expect(box.x).toBeGreaterThan(vw / 2);
-  else expect(box.x).toBeLessThan(vw / 4);
+  expect(box.x).toBeGreaterThan(page.viewportSize()!.width * 0.75);
   await rb.tap();
   await expect(rb).toHaveCount(0);
 
@@ -67,4 +65,41 @@ test('one finger drags a point; two fingers pinch-zoom', async ({ page }) => {
   const z1 = await page.evaluate(() => (window as any).__drawgeo.controller.cam.zoom);
   expect(z1).toBeGreaterThan(z0 * 1.8);
   await expect.poll(() => page.evaluate(() => (window as any).__drawgeo.useApp.getState().doc.steps.length)).toBe(1); // gestures never construct
+});
+
+test('long-press pins a More tool without also selecting it; a short tap selects', async ({ page }) => {
+  await setup(page);
+  const cdp = await page.context().newCDPSession(page);
+  await page.locator('[data-tool="more"]').tap();
+  const item = page.getByRole('dialog', { name: 'More tools' }).locator('[data-tool="segment"]');
+  const b = (await item.boundingBox())!;
+  const at = [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 0 }];
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at } as any);
+  await page.waitForTimeout(750);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] } as any);
+  await expect(page.locator('.toolbar [data-tool="segment"]')).toBeVisible(); // pinned
+  await expect(page.getByRole('dialog', { name: 'More tools' })).toBeVisible(); // not chosen
+  await expect(page.locator('.toolbar [data-tool="move"]')).toHaveAttribute('aria-pressed', 'true');
+  await item.tap(); // a normal tap chooses it
+  await expect(page.locator('.toolbar [data-tool="segment"]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('small phone (iPhone 7 with Safari bars, 375×553): book and restore sit above the tools', async ({ page }) => {
+  test.skip(page.viewportSize()!.width >= 600, 'phone layout');
+  await page.setViewportSize({ width: 375, height: 553 });
+  await setup(page);
+  // make the restore button appear (a moved point)
+  await page.evaluate(() => {
+    const h = (window as any).__drawgeo;
+    const s = h.useApp.getState();
+    const o = { id: 'p1', kind: 'point', name: 'A', def: { t: 'free', x: 0, y: 0 } };
+    h.useApp.setState({ doc: { ...s.doc, objects: { p1: o }, order: ['p1'] } });
+    h.useApp.setState({ moveSession: { p1: { t: 'free', x: 10, y: 0 } } });
+  });
+  const tools = (await page.locator('.toolbar').boundingBox())!;
+  for (const id of ['steps-button', 'restore-moved']) {
+    const box = (await page.getByTestId(id).boundingBox())!;
+    expect(box.y + box.height, `${id} overlaps the tools`).toBeLessThanOrEqual(tools.y);
+    expect(box.y).toBeGreaterThan(0);
+  }
 });
