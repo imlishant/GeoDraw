@@ -11,12 +11,3 @@ export function describeStep(doc: Doc, s: Step): string {
   const ins = inputs.length ? ` (${inputs.join(', ')})` : '';
   return `${label}${ins}${outs.length ? ` → ${outs.join(', ')}` : ''}`;
 }
-
-/** Plain-text write-up of the solution: numbered steps and totals. */
-export function stepsAsText(doc: Doc): string {
-  const lines = [`${doc.title}`, ''];
-  doc.steps.forEach((s, i) => {
-    lines.push(`${i + 1}. ${describeStep(doc, s)}${s.note ? `\n   ${s.note}` : ''}`);
-  });
-  return lines.join('\n');
-}

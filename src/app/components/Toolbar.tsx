@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { isToolAllowed, setTool, toast, togglePin, useApp } from '../store';
+import { isToolAllowed, setTool, toast, togglePanel, togglePin, useApp } from '../store';
 import { MAIN_BAR, MAX_PINS, MORE_GROUPS, TOOL_BY_KEY, TOOLS, type ToolKey, type ToolUI } from '../tools';
 import { Icon, ToolIcon } from './Icons';
 import { StepsButton } from './StepsDrawer';
@@ -62,7 +62,7 @@ export function Toolbar() {
           aria-expanded={moreOpen}
           data-tool="more"
           disabled={readOnly}
-          onClick={() => useApp.setState({ moreOpen: !moreOpen, menuOpen: false })}
+          onClick={() => togglePanel('more')}
         >
           <Icon name="more" size={24} />
         </button>

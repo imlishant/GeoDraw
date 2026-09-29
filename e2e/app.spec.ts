@@ -217,3 +217,83 @@ test('right-click pins/unpins a More tool without selecting it', async ({ page, 
   await more.locator('[data-tool="tangents"]').click({ button: 'right' });
   await expect(page.locator('.toolbar [data-tool="tangents"]')).toHaveCount(0);
 });
+
+test('only one side panel at a time; picking a tool closes them', async ({ page, isMobile }) => {
+  await fresh(page);
+  const menu = page.getByRole('menu');
+  const steps = page.getByRole('complementary', { name: 'Construction panel' });
+  const more = page.getByRole('dialog', { name: 'More tools' });
+  await page.getByTestId('steps-button').click();
+  await expect(steps).toBeVisible();
+  await page.getByRole('button', { name: 'Menu' }).click(); // menu replaces the Steps book
+  await expect(menu).toBeVisible();
+  await expect(steps).toHaveCount(0);
+  await page.getByTestId('steps-button').click(); // and back
+  await expect(steps).toBeVisible();
+  await expect(menu).toHaveCount(0);
+  await page.locator('[data-tool="more"]').click(); // More replaces it too
+  await expect(more).toBeVisible();
+  await expect(steps).toHaveCount(0);
+  // on phones More is a bottom sheet over the book button: close it first
+  if (isMobile) await more.getByRole('button', { name: 'Close' }).click();
+  await page.getByTestId('steps-button').click();
+  await expect(more).toHaveCount(0);
+  await page.locator('.toolbar [data-tool="circle"]').click(); // choosing a tool clears panels away
+  await expect(steps).toHaveCount(0);
+  await expect(menu).toHaveCount(0);
+});
+
+test('Save as image: white background even in dark mode, and it reopens as the construction', async ({ page, isMobile }) => {
+  test.skip(!!isMobile, 'phones hand the file to the share sheet instead of downloading');
+  await fresh(page);
+  await page.getByTestId('theme-toggle').click();
+  if ((await page.locator('html').getAttribute('data-theme')) !== 'dark') await page.getByTestId('theme-toggle').click();
+  await tool(page, 'circle');
+  await tap(page, -60, 0);
+  await tap(page, 60, 0);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  const dl = page.waitForEvent('download');
+  await page.getByRole('menuitem', { name: 'Save as image' }).click();
+  const file = await (await dl).path();
+  // read the downloaded PNG back inside the page (through a temporary file input)
+  await page.evaluate(() => {
+    const i = document.createElement('input');
+    i.type = 'file';
+    i.id = 'probe';
+    document.body.appendChild(i);
+  });
+  await page.setInputFiles('#probe', file);
+  const corner = await page.evaluate(async () => {
+    const f = (document.getElementById('probe') as HTMLInputElement).files![0];
+    const head = new Uint8Array(await f.slice(0, 4).arrayBuffer());
+    if (String.fromCharCode(head[1], head[2], head[3]) !== 'PNG') return 'not a png';
+    const img = new Image();
+    img.src = URL.createObjectURL(f);
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.width;
+    c.height = img.height;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    document.getElementById('probe')!.remove();
+    return [...ctx.getImageData(2, 2, 1, 1).data];
+  });
+  expect(corner).toEqual([255, 255, 255, 255]);
+  // reopen it: New, then Open file → same two points and circle
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('menuitem', { name: 'New construction' }).click();
+  await expectSteps(page, 0);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  const chooser = page.waitForEvent('filechooser');
+  await page.getByRole('menuitem', { name: 'Open file…' }).click();
+  await (await chooser).setFiles(file);
+  await expectSteps(page, 1);
+});
+
+test('menu: three ways to save/share; no keyboard shortcuts on touch devices', async ({ page, isMobile }) => {
+  await fresh(page);
+  await page.getByRole('button', { name: 'Menu' }).click();
+  for (const name of ['Save as file', 'Save as image', 'Share link…']) await expect(page.getByRole('menuitem', { name })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Export/ })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Keyboard shortcuts' })).toHaveCount(isMobile ? 0 : 1);
+});

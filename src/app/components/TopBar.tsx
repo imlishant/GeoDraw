@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { doRedo, doUndo, setTitle, updateSettings, useApp } from '../store';
+import { doRedo, doUndo, setTitle, togglePanel, updateSettings, useApp } from '../store';
 import { Icon } from './Icons';
-import { copyShareLink, exportImage, exportJSON, exportStepsText, makeCopy, newConstruction, pickFileToImport } from '../actions';
+import { copyShareLink, makeCopy, newConstruction, pickFileToImport, saveFile, saveImage } from '../actions';
 import { cloudEnabled } from '../persistence/cloud';
 
 export function TopBar() {
@@ -17,7 +17,7 @@ export function TopBar() {
     <>
       <div className="topbar">
         <div className="topbar-left">
-          <button className="icon-btn" aria-label="Menu" aria-expanded={menuOpen} onClick={() => useApp.setState({ menuOpen: !menuOpen })}>
+          <button className="icon-btn" aria-label="Menu" aria-expanded={menuOpen} onClick={() => togglePanel('menu')}>
             <Icon name="menu" />
           </button>
           <input
@@ -63,6 +63,9 @@ function SharedBanner() {
   );
 }
 
+/** Phones and touch-only tablets have no keyboard to press shortcuts on; an iPad with a trackpad does. */
+const hasKeyboard = () => typeof matchMedia === 'undefined' || matchMedia('(hover: hover) and (pointer: fine)').matches;
+
 function Menu() {
   const close = (fn: () => void) => () => {
     useApp.setState({ menuOpen: false });
@@ -82,17 +85,11 @@ function Menu() {
       <button role="menuitem" onClick={close(pickFileToImport)}>
         Open file…
       </button>
-      <button role="menuitem" onClick={close(exportJSON)}>
-        Save as file (.drawgeo.json)
+      <button role="menuitem" onClick={close(() => void saveFile())}>
+        Save as file
       </button>
-      <button role="menuitem" onClick={close(() => void exportImage('png'))}>
-        Export PNG
-      </button>
-      <button role="menuitem" onClick={close(() => void exportImage('svg', true))}>
-        Export SVG (white background)
-      </button>
-      <button role="menuitem" onClick={close(exportStepsText)}>
-        Export steps as text
+      <button role="menuitem" onClick={close(() => void saveImage())}>
+        Save as image
       </button>
       <button role="menuitem" onClick={close(() => void copyShareLink())}>
         Share link…
@@ -111,9 +108,11 @@ function Menu() {
       <button role="menuitem" onClick={open('settings')}>
         Settings…
       </button>
-      <button role="menuitem" onClick={open('shortcuts')}>
-        Keyboard shortcuts
-      </button>
+      {hasKeyboard() && (
+        <button role="menuitem" onClick={open('shortcuts')}>
+          Keyboard shortcuts
+        </button>
+      )}
     </div>
   );
 }

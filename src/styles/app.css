@@ -275,6 +275,8 @@ button:disabled {
 }
 /* book · hint · restore */
 .bottom-row {
+  position: relative;
+  z-index: 15; /* above the More backdrop: the book works directly while More is open */
   display: grid;
   grid-template-columns: 44px 1fr 44px;
   align-items: center;

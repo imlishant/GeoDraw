@@ -3,7 +3,7 @@ import type { GeoObject, Step } from '../../engine/types';
 import { setObjectsPatch } from '../../engine/doc';
 import { measureRefs } from '../../engine/doc';
 import { measureValue } from '../../engine/measure';
-import { applyPatch, useApp } from '../store';
+import { applyPatch, closePanels, togglePanel, useApp } from '../store';
 import { describeStep } from '../describe';
 import { formatNumber } from '../format';
 import { Icon } from './Icons';
@@ -20,7 +20,7 @@ export function StepsButton() {
       title="Steps, objects & measures"
       aria-expanded={open}
       data-testid="steps-button"
-      onClick={() => useApp.setState({ stepsOpen: !open, moreOpen: false })}
+      onClick={() => togglePanel('steps')}
     >
       <Icon name="steps" />
     </button>
@@ -40,7 +40,7 @@ export function StepsDrawer() {
           </button>
         ))}
         <span className="spacer" />
-        <button aria-label="Close panel" onClick={() => useApp.setState({ stepsOpen: false, scrub: null, stepHover: [] })}>
+        <button aria-label="Close panel" onClick={closePanels}>
           <Icon name="close" size={18} />
         </button>
       </div>

@@ -1,20 +1,19 @@
-// PNG/SVG export with the construction embedded (Excalidraw's trick): opening an
-// exported image in DrawGeo restores the full construction and its steps.
+// PNG export with the construction embedded (Excalidraw's trick): opening an exported
+// image in DrawGeo restores the full construction and its steps. Always light colors
+// on white, whatever theme is on screen (a dark-theme figure on white is unreadable).
 
 import type { Doc, Values } from '../engine/types';
 import { base64UrlToBytes, bytesToBase64Url, docToJSON, parseDoc } from '../engine/serialize';
 import { boundingBox } from './hit';
-import { fit, toScreen, type Viewport } from './camera';
-import { clipLine, drawConstruction, isDraggable, type CanvasMeasure } from './renderer';
-import { objectColor, type Theme } from './theme';
+import { fit, type Viewport } from './camera';
+import { drawConstruction, type CanvasMeasure } from './renderer';
+import { LIGHT, type Theme } from './theme';
 
 const KEY = 'drawgeo';
 
 export interface ExportOpts {
-  theme: Theme;
   showPointLabels: boolean;
   measures: CanvasMeasure[];
-  whiteBackground: boolean;
 }
 
 function exportFrame(doc: Doc, values: Values) {
@@ -27,7 +26,7 @@ function exportFrame(doc: Doc, values: Values) {
   return { vp, cam };
 }
 
-const printTheme = (t: Theme): Theme => ({ ...t, bg: '#ffffff' });
+const PRINT: Theme = { ...LIGHT, bg: '#ffffff' };
 
 export async function exportPNG(doc: Doc, values: Values, o: ExportOpts): Promise<Blob> {
   const { vp, cam } = exportFrame(doc, values);
@@ -37,7 +36,7 @@ export async function exportPNG(doc: Doc, values: Values, o: ExportOpts): Promis
   canvas.height = Math.round(vp.h * scale);
   const ctx = canvas.getContext('2d')!;
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
-  const theme = o.whiteBackground ? printTheme(o.theme) : o.theme;
+  const theme = PRINT;
   ctx.fillStyle = theme.bg;
   ctx.fillRect(0, 0, vp.w, vp.h);
   drawConstruction(ctx, vp, {
@@ -55,56 +54,6 @@ export async function exportPNG(doc: Doc, values: Values, o: ExportOpts): Promis
   const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('PNG export failed'))), 'image/png'));
   const bytes = new Uint8Array(await blob.arrayBuffer());
   return new Blob([embedInPng(bytes, docToJSON(doc)) as BlobPart], { type: 'image/png' });
-}
-
-export function exportSVG(doc: Doc, values: Values, o: ExportOpts): string {
-  const { vp, cam } = exportFrame(doc, values);
-  const t = o.whiteBackground ? printTheme(o.theme) : o.theme;
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const parts: string[] = [];
-  const f = (n: number) => n.toFixed(2);
-  for (const id of doc.order) {
-    const ob = doc.objects[id];
-    const g = values.get(id);
-    if (!ob || !g || ob.hidden) continue;
-    const color = objectColor(t, ob.style?.color);
-    const sw = 1.4;
-    const dash = ob.style?.dashed ? ' stroke-dasharray="7 5"' : '';
-    if (g.k === 'line') {
-      const seg = clipLine(g, cam, vp, 0);
-      if (!seg) continue;
-      const a = toScreen(cam, vp, seg[0].x, seg[0].y);
-      const b = toScreen(cam, vp, seg[1].x, seg[1].y);
-      parts.push(`<line x1="${f(a.x)}" y1="${f(a.y)}" x2="${f(b.x)}" y2="${f(b.y)}" stroke="${color}" stroke-width="${sw}"${dash} stroke-linecap="round"/>`);
-    } else if (g.k === 'circle') {
-      const c = toScreen(cam, vp, g.cx, g.cy);
-      const r = g.r * cam.zoom;
-      if (g.a0 !== undefined && g.a1 !== undefined) {
-        const p0 = { x: c.x + r * Math.cos(-g.a0), y: c.y + r * Math.sin(-g.a0) };
-        const p1 = { x: c.x + r * Math.cos(-g.a1), y: c.y + r * Math.sin(-g.a1) };
-        const large = g.a1 - g.a0 > Math.PI ? 1 : 0;
-        parts.push(`<path d="M${f(p0.x)} ${f(p0.y)} A${f(r)} ${f(r)} 0 ${large} 0 ${f(p1.x)} ${f(p1.y)}" fill="none" stroke="${color}" stroke-width="${sw}"${dash}/>`);
-      } else {
-        parts.push(`<circle cx="${f(c.x)}" cy="${f(c.y)}" r="${f(r)}" fill="none" stroke="${color}" stroke-width="${sw}"${dash}/>`);
-      }
-    } else if (g.k === 'region') {
-      const pts = g.pts.map((p) => toScreen(cam, vp, p.x, p.y)).map((p) => `${f(p.x)},${f(p.y)}`).join(' ');
-      parts.push(`<polygon points="${pts}" fill="${color}" fill-opacity="0.1" stroke="none"/>`);
-    }
-  }
-  for (const id of doc.order) {
-    const ob = doc.objects[id];
-    const g = values.get(id);
-    if (!ob || !g || ob.hidden || g.k !== 'point') continue;
-    const color = objectColor(t, ob.style?.color);
-    const p = toScreen(cam, vp, g.x, g.y);
-    parts.push(`<circle cx="${f(p.x)}" cy="${f(p.y)}" r="4.2" fill="${isDraggable(ob) ? color : t.bg}" stroke="${color}" stroke-width="1.6"/>`);
-    if (o.showPointLabels && ob.showLabel !== false) {
-      parts.push(`<text x="${f(p.x + 8)}" y="${f(p.y - 12)}" font-family="STIX Two Text, Times New Roman, serif" font-style="italic" font-size="18" fill="${t.label}" dominant-baseline="middle">${esc(ob.name)}</text>`);
-    }
-  }
-  const meta = `<metadata id="${KEY}">${esc(docToJSON(doc))}</metadata>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${f(vp.w)}" height="${f(vp.h)}" viewBox="0 0 ${f(vp.w)} ${f(vp.h)}">${meta}<rect width="100%" height="100%" fill="${t.bg}"/>${parts.join('')}</svg>`;
 }
 
 // ---- PNG tEXt chunk ---------------------------------------------------------
@@ -164,11 +113,4 @@ export function extractFromPng(png: Uint8Array): Doc | null {
     off += 12 + len;
   }
   return null;
-}
-
-export function extractFromSvg(svg: string): Doc | null {
-  const m = svg.match(new RegExp(`<metadata id="${KEY}">([\\s\\S]*?)</metadata>`));
-  if (!m) return null;
-  const txt = m[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
-  return parseDoc(txt);
 }

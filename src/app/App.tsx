@@ -7,7 +7,7 @@ import { SelectionPopover } from './components/Popover';
 import { Dialogs } from './components/Dialogs';
 import { Toasts } from './components/Chrome';
 import { controller, deleteWithConfirm } from './controller';
-import { clearSession, doRedo, doUndo, loadDoc, setTool, toast, useApp } from './store';
+import { clearSession, doRedo, doUndo, loadDoc, setTool, toast, togglePanel, useApp } from './store';
 import { applyThemeVars, DARK, LIGHT } from '../render/theme';
 import { setObjectsPatch } from '../engine/doc';
 import { applyPatch } from './store';
@@ -136,8 +136,8 @@ function useKeyboard() {
         if (objs.length) applyPatch(setObjectsPatch(s.doc, objs.map((o) => ({ ...o, hidden: !o.hidden })), 'Hide'));
         return;
       }
-      if (k === 'm' && !s.readOnly) return useApp.setState({ moreOpen: !s.moreOpen });
-      if (k === 'j') return useApp.setState({ stepsOpen: !s.stepsOpen });
+      if (k === 'm' && !s.readOnly) return togglePanel('more');
+      if (k === 'j') return togglePanel('steps');
       if (k === '1') return controller.zoomToFit();
       if (k === '0') return controller.resetZoom();
       if (k === '+' || k === '=') return controller.zoomBy(1.25);

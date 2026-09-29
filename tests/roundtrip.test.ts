@@ -2,9 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { Scratch } from './scratch';
 import { evaluateDoc } from '../src/engine/evaluate';
 import { docToJSON, parseDoc } from '../src/engine/serialize';
-import { embedInPng, extractFromPng, extractFromSvg, exportSVG } from '../src/render/export';
+import { embedInPng, extractFromPng } from '../src/render/export';
 import { decodeShare, encodeShare } from '../src/app/persistence/share';
-import { LIGHT } from '../src/render/theme';
 import type { Doc } from '../src/engine/types';
 
 // A construction using every tool, then every save format must bring it back identically.
@@ -57,12 +56,6 @@ describe('save formats round-trip every tool', () => {
     const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 31, 21, 196, 137, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130]);
     const back = extractFromPng(embedInPng(png, docToJSON(doc)))!;
     expect(back.steps).toEqual(doc.steps);
-    expect(geo(back)).toBe(geo(doc));
-  });
-  it('SVG (construction embedded in metadata)', () => {
-    const svg = exportSVG(doc, evaluateDoc(doc), { theme: LIGHT, showPointLabels: true, measures: [], whiteBackground: true });
-    expect(svg.startsWith('<svg')).toBe(true);
-    const back = extractFromSvg(svg)!;
     expect(geo(back)).toBe(geo(doc));
   });
   it('share link', async () => {

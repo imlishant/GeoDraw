@@ -1,9 +1,7 @@
 import type { Doc } from '../engine/types';
 import { newDoc, newId } from '../engine/doc';
 import { docToJSON, FILE_EXT, parseDoc } from '../engine/serialize';
-import { exportPNG, exportSVG, extractFromPng, extractFromSvg } from '../render/export';
-import { controller } from './controller';
-import { stepsAsText } from './describe';
+import { exportPNG, extractFromPng } from '../render/export';
 import { loadDoc, toast, useApp } from './store';
 import { loadLocal, lsSet, saveLocal } from './persistence/library';
 import { shareUrl } from './persistence/share';
@@ -52,11 +50,10 @@ export async function makeCopy() {
 
 export async function importFile(file: File) {
   try {
-    let doc: Doc | null;
-    const name = file.name.toLowerCase();
-    if (file.type === 'image/png' || name.endsWith('.png')) doc = extractFromPng(new Uint8Array(await file.arrayBuffer()));
-    else if (file.type === 'image/svg+xml' || name.endsWith('.svg')) doc = extractFromSvg(await file.text());
-    else doc = parseDoc(await file.text());
+    // recognise a PNG by its content, not its name: shared images often arrive renamed
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const isPng = bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    const doc: Doc | null = isPng ? extractFromPng(bytes) : parseDoc(new TextDecoder().decode(bytes));
     if (!doc) throw new Error('This image has no DrawGeo construction inside');
     const fresh = { ...doc, id: newId('d'), updatedAt: Date.now() };
     loadDoc(fresh);
@@ -71,7 +68,7 @@ export async function importFile(file: File) {
 export function pickFileToImport() {
   const input = document.createElement('input');
   input.type = 'file';
-  input.accept = `${FILE_EXT},.json,.png,.svg,application/json,image/png,image/svg+xml`;
+  input.accept = `${FILE_EXT},.json,.png,application/json,image/png`;
   input.onchange = () => {
     const f = input.files?.[0];
     if (f) void importFile(f);
@@ -94,34 +91,48 @@ function canvasMeasuresForExport() {
   return out;
 }
 
-export function exportJSON() {
-  const d = useApp.getState().doc;
-  download(new Blob([docToJSON(d)], { type: 'application/json' }), `${slug(d.title)}${FILE_EXT}`);
+const isPhoneLike = () => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+const cancelled = (e: unknown) => e instanceof DOMException && e.name === 'AbortError';
+
+/** On phones/tablets, hand the file to the share sheet (Save to Photos/Files, messages…); else download. */
+async function shareOrDownload(blob: Blob, name: string, title: string) {
+  const file = new File([blob], name, { type: blob.type });
+  if (isPhoneLike() && navigator.canShare?.({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title });
+      return;
+    } catch (e) {
+      if (cancelled(e)) return; // closed the share sheet: nothing else to do
+    }
+  }
+  download(blob, name);
 }
 
-export async function exportImage(kind: 'png' | 'svg', whiteBackground = false) {
+/** The whole construction as a file: the backup that can't lose anything. */
+export async function saveFile() {
+  const d = useApp.getState().doc;
+  await shareOrDownload(new Blob([docToJSON(d)], { type: 'application/json' }), `${slug(d.title)}${FILE_EXT}`, d.title);
+}
+
+/** A picture of the figure (white background). DrawGeo can reopen it, unless an app strips the hidden data. */
+export async function saveImage() {
   const s = useApp.getState();
-  const opts = { theme: controller.theme, showPointLabels: s.settings.pointLabels, measures: canvasMeasuresForExport(), whiteBackground };
-  if (kind === 'png') download(await exportPNG(s.doc, s.values, opts), `${slug(s.doc.title)}.png`);
-  else download(new Blob([exportSVG(s.doc, s.values, opts)], { type: 'image/svg+xml' }), `${slug(s.doc.title)}.svg`);
-}
-
-export function exportStepsText() {
-  const d = useApp.getState().doc;
-  download(new Blob([stepsAsText(d)], { type: 'text/plain' }), `${slug(d.title)}-steps.txt`);
+  const png = await exportPNG(s.doc, s.values, { showPointLabels: s.settings.pointLabels, measures: canvasMeasuresForExport() });
+  await shareOrDownload(png, `${slug(s.doc.title)}.png`, s.doc.title);
 }
 
 export async function copyShareLink() {
   const d = useApp.getState().doc;
   const url = await shareUrl(d);
   try {
-    if (navigator.share && matchMedia('(pointer: coarse)').matches) {
+    if (navigator.share && isPhoneLike()) {
       await navigator.share({ title: d.title, url });
       return;
     }
     await navigator.clipboard.writeText(url);
     toast('Share link copied. Anyone with it can view and replay the steps.', 'success', 4000);
-  } catch {
+  } catch (e) {
+    if (cancelled(e)) return;
     window.prompt('Copy this link:', url);
   }
 }

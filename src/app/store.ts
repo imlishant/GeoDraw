@@ -203,6 +203,23 @@ export function isToolAllowed(key: ToolKey, s: AppState = get()): boolean {
   return true;
 }
 
+// ---- panels: only one of menu / Steps book / More is open at a time ------------
+
+export type Panel = 'menu' | 'steps' | 'more';
+
+const panelsClosed = { menuOpen: false, stepsOpen: false, moreOpen: false, scrub: null, stepHover: [] as Id[] };
+
+/** Open one panel (closing the others), or close it if it's already open. */
+export function togglePanel(p: Panel) {
+  const s = get();
+  const isOpen = p === 'menu' ? s.menuOpen : p === 'steps' ? s.stepsOpen : s.moreOpen;
+  set({ ...panelsClosed, ...(isOpen ? {} : { [`${p}Open`]: true }) });
+}
+
+export function closePanels() {
+  set(panelsClosed);
+}
+
 export function setTool(key: ToolKey) {
   if (!isToolAllowed(key)) {
     toast('Strict mode: only Point, Line, Circle and Intersect', 'info');
@@ -211,9 +228,9 @@ export function setTool(key: ToolKey) {
   const t = TOOL_BY_KEY[key];
   const main = t.group === 'main';
   set((s) => ({
+    ...panelsClosed, // picking a tool clears the side panels away
     tool: key,
     session: { picks: [], pending: [] },
-    moreOpen: false,
     selection: key === 'move' ? s.selection : [],
     popoverAt: null,
     lastMore: main || s.settings.pins.includes(key) ? s.lastMore : key,

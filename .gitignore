@@ -1,10 +1,29 @@
+# dependencies & builds
 node_modules
 dist
 dev-dist
+*.tsbuildinfo
+
+# test output
 test-results
 playwright-report
+coverage
+
+# local env & secrets (Supabase keys etc.)
 .env
-.env.local
+.env.*
+!.env.example
+
+# deploy tool state
+.vercel
+
+# editors & OS
 .DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.log
+
+# your screenshots/recordings (only the README is tracked)
 feedback/*
 !feedback/README.md
