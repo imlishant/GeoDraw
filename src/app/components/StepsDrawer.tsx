@@ -7,6 +7,7 @@ import { applyPatch, closePanels, togglePanel, useApp } from '../store';
 import { describeStep } from '../describe';
 import { formatNumber } from '../format';
 import { Icon } from './Icons';
+import { usePresence, useSheetDrag } from './motion';
 import { objectColor } from '../../render/theme';
 import { controller } from '../controller';
 
@@ -30,9 +31,19 @@ export function StepsButton() {
 export function StepsDrawer() {
   const open = useApp((s) => s.stepsOpen);
   const tab = useApp((s) => s.stepsTab);
-  if (!open) return null;
+  const { state } = usePresence(open);
+  const sheet = useSheetDrag(closePanels);
+  if (!state) return null;
   return (
-    <div className="panel drawer" role="complementary" aria-label="Construction panel">
+    <div
+      ref={sheet.ref}
+      className="panel drawer"
+      role="complementary"
+      aria-label="Construction panel"
+      data-state={state}
+      aria-hidden={state === 'closing' || undefined}
+    >
+      <div className="sheet-handle" aria-hidden="true" {...sheet.handle} />
       <div className="tabs" role="tablist">
         {(['steps', 'objects', 'measures'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? 'on' : ''} onClick={() => useApp.setState({ stepsTab: t })}>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { doRedo, doUndo, setTitle, togglePanel, updateSettings, useApp } from '../store';
 import { Icon } from './Icons';
+import { usePresence, type PresenceState } from './motion';
 import { copyShareLink, makeCopy, newConstruction, pickFileToImport, saveFile, saveImage } from '../actions';
 import { cloudEnabled } from '../persistence/cloud';
 
@@ -10,6 +11,7 @@ export function TopBar() {
   const canRedo = useApp((s) => s.history.future.length > 0);
   const readOnly = useApp((s) => s.readOnly);
   const menuOpen = useApp((s) => s.menuOpen);
+  const menu = usePresence(menuOpen);
   const [title, setT] = useState(doc.title);
   useEffect(() => setT(doc.title), [doc.title]);
 
@@ -45,7 +47,7 @@ export function TopBar() {
           </button>
         </div>
       </div>
-      {menuOpen && <Menu />}
+      {menu.state && <Menu state={menu.state} />}
     </>
   );
 }
@@ -66,7 +68,7 @@ function SharedBanner() {
 /** Phones and touch-only tablets have no keyboard to press shortcuts on; an iPad with a trackpad does. */
 const hasKeyboard = () => typeof matchMedia === 'undefined' || matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-function Menu() {
+function Menu({ state }: { state: PresenceState }) {
   const close = (fn: () => void) => () => {
     useApp.setState({ menuOpen: false });
     fn();
@@ -74,7 +76,7 @@ function Menu() {
   const readOnly = useApp((s) => s.readOnly);
   const open = (dialog: 'library' | 'settings' | 'shortcuts' | 'account') => close(() => useApp.setState({ dialog }));
   return (
-    <div className="panel menu" role="menu">
+    <div className="panel menu" role="menu" data-state={state} aria-hidden={state === 'closing' || undefined}>
       <button role="menuitem" onClick={close(newConstruction)}>
         New construction
       </button>

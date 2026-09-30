@@ -27,6 +27,7 @@ export interface Toast {
   id: number;
   text: string;
   kind: 'info' | 'error' | 'success';
+  leaving?: boolean; // fading out
 }
 
 export interface PromptState {
@@ -258,7 +259,8 @@ let toastId = 0;
 export function toast(text: string, kind: Toast['kind'] = 'info', ms = 3200) {
   const id = ++toastId;
   set((s) => ({ toasts: [...s.toasts.slice(-2), { id, text, kind }] }));
-  setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), ms);
+  setTimeout(() => set((s) => ({ toasts: s.toasts.map((t) => (t.id === id ? { ...t, leaving: true } : t)) })), ms);
+  setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), ms + 220);
 }
 
 export function askNumber(p: PromptState) {

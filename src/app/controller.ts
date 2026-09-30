@@ -13,6 +13,7 @@ import { LIGHT, type Theme } from '../render/theme';
 import { DISTINCT_POINTS, TOOL_BY_KEY, type Pick, type ToolUI } from './tools';
 import { applyPatch, askConfirm, askNumber, clearSession, noteMoved, toast, useApp, type AppState } from './store';
 import { formatNumber } from './format';
+import { reducedMotion } from './components/motion';
 
 type Gesture =
   | { k: 'tap'; x0: number; y0: number; type: string; shift: boolean }
@@ -99,6 +100,7 @@ export class Controller {
     this.unsub = useApp.subscribe((s, prev) => {
       if (s.doc !== prev.doc && s.doc.id !== prev.doc.id) this.initialCamera();
       if (s.tool !== prev.tool || s.session !== prev.session) this.refreshHover();
+      if (s.stepsOpen !== prev.stepsOpen) this.onStepsSheet(s.stepsOpen);
       this.sceneDirty = true;
       this.overlayDirty = true;
       this.schedule();
@@ -159,6 +161,54 @@ export class Controller {
     const s = useApp.getState();
     this.cam = clampPan(c, this.vp(), boundingBox(s.doc, s.values));
     this.invalidate();
+  }
+
+  // ---- smooth camera moves --------------------------------------------------
+
+  private camAnim = 0;
+  private camBeforeSheet: Camera | null = null;
+
+  /** Glide the view to `to` (iOS ease-out). Any touch, click or wheel stops it. */
+  animateCam(to: Camera, ms = 320) {
+    cancelAnimationFrame(this.camAnim);
+    if (reducedMotion()) return this.setCam(to);
+    const from = this.cam;
+    const t0 = performance.now();
+    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+    const step = () => {
+      const t = Math.min(1, (performance.now() - t0) / ms);
+      const k = ease(t);
+      if (t >= 1) return this.setCam(to); // land exactly on the target
+      // zoom interpolates geometrically so it feels even
+      this.setCam({
+        cx: from.cx + (to.cx - from.cx) * k,
+        cy: from.cy + (to.cy - from.cy) * k,
+        zoom: from.zoom * Math.pow(to.zoom / from.zoom, k),
+      });
+      if (t < 1) this.camAnim = requestAnimationFrame(step);
+    };
+    this.camAnim = requestAnimationFrame(step);
+  }
+
+  private stopCamAnim() {
+    cancelAnimationFrame(this.camAnim);
+  }
+
+  /** Phones: the Steps sheet covers the lower 60% of the screen, so slide the figure into the part left visible. */
+  private onStepsSheet(open: boolean) {
+    const vp = this.vp();
+    if (vp.w >= 600) return;
+    const s = useApp.getState();
+    if (open) {
+      const box = boundingBox(s.doc, s.values);
+      if (!box) return;
+      this.camBeforeSheet = this.cam;
+      const target = fit(box, vp, { top: 76, bottom: vp.h * 0.6 + 12, left: 16, right: 16 }, 0.9, this.cam.zoom);
+      this.animateCam(target);
+    } else if (this.camBeforeSheet) {
+      this.animateCam(this.camBeforeSheet);
+      this.camBeforeSheet = null;
+    }
   }
 
   zoomBy(factor: number) {
@@ -291,6 +341,7 @@ export class Controller {
   }
 
   private onDown(e: PointerEvent) {
+    this.stopCamAnim();
     const p = this.local(e);
     this.lastPointerType = e.pointerType;
     this.pointers.set(e.pointerId, { ...p, type: e.pointerType });
@@ -304,6 +355,7 @@ export class Controller {
       const [a, b] = [...this.pointers.values()];
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
       this.gesture = { k: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, cam0: this.cam, world0: toWorld(this.cam, this.vp(), mid.x, mid.y) };
+      this.camBeforeSheet = null;
       this.clearHover();
       return;
     }
@@ -362,6 +414,7 @@ export class Controller {
         const slop = TAP_SLOP[g.type] ?? 6;
         if (Math.hypot(p.x - g.x0, p.y - g.y0) > slop) {
           this.gesture = { k: 'pan', lastX: p.x, lastY: p.y };
+          this.camBeforeSheet = null; // you moved the view yourself: don't jump back later
           this.setCam(panBy(this.cam, p.x - g.x0, p.y - g.y0));
           this.setCursor('grabbing');
           this.clearHover();
@@ -412,6 +465,8 @@ export class Controller {
 
   private onWheel(e: WheelEvent) {
     e.preventDefault();
+    this.stopCamAnim();
+    this.camBeforeSheet = null;
     const p = this.local(e);
     const unit = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1;
     const dx = e.deltaX * unit;

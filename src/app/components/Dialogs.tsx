@@ -5,11 +5,26 @@ import { deleteLocal, listLocal, type DocSummary } from '../persistence/library'
 import { cloudEnabled, currentUser, deleteCloud, listCloud, loadCloud, onAuthChange, signInWithEmail, signInWithGoogle, signOut, type CloudUser } from '../persistence/cloud';
 import { loadDoc } from '../store';
 import { Icon } from './Icons';
+import { usePresence, type PresenceState } from './motion';
 import { controller } from '../controller';
 
-function Dialog({ title, children, onClose, size = '', actions }: { title: string; children: ReactNode; onClose: () => void; size?: '' | 'wide' | 'small'; actions?: ReactNode }) {
+function Dialog({
+  title,
+  children,
+  onClose,
+  size = '',
+  actions,
+  state = 'open',
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  size?: '' | 'wide' | 'small';
+  actions?: ReactNode;
+  state?: PresenceState;
+}) {
   return (
-    <div className="scrim" onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="scrim" data-state={state} aria-hidden={state === 'closing' || undefined} onPointerDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={`panel dialog ${size}`} role="dialog" aria-modal="true" aria-label={title}>
         <header>
           <h2>{title}</h2>
@@ -25,25 +40,26 @@ function Dialog({ title, children, onClose, size = '', actions }: { title: strin
 }
 
 export function Dialogs() {
-  const dialog = useApp((s) => s.dialog);
+  const { item: dialog, state } = usePresence(useApp((s) => s.dialog));
   const close = () => useApp.setState({ dialog: null });
+  const st = state ?? 'open';
   return (
     <>
       <NumberPrompt />
       <ConfirmDialog />
-      {dialog === 'settings' && <SettingsDialog onClose={close} />}
-      {dialog === 'shortcuts' && <ShortcutsDialog onClose={close} />}
-      {dialog === 'library' && <LibraryDialog onClose={close} />}
-      {dialog === 'account' && <AccountDialog onClose={close} />}
+      {dialog === 'settings' && <SettingsDialog onClose={close} state={st} />}
+      {dialog === 'shortcuts' && <ShortcutsDialog onClose={close} state={st} />}
+      {dialog === 'library' && <LibraryDialog onClose={close} state={st} />}
+      {dialog === 'account' && <AccountDialog onClose={close} state={st} />}
     </>
   );
 }
 
 function NumberPrompt() {
-  const prompt = useApp((s) => s.prompt);
+  const { item: prompt, state } = usePresence(useApp((s) => s.prompt));
   const [value, setValue] = useState('');
   useEffect(() => setValue(prompt?.value ?? ''), [prompt]);
-  if (!prompt) return null;
+  if (!prompt || !state) return null;
   const cancel = () => {
     useApp.setState({ prompt: null });
     clearSession();
@@ -58,6 +74,7 @@ function NumberPrompt() {
     <Dialog
       title={prompt.label}
       size="small"
+      state={state}
       onClose={cancel}
       actions={
         <>
@@ -90,13 +107,14 @@ function NumberPrompt() {
 }
 
 function ConfirmDialog() {
-  const c = useApp((s) => s.confirm);
-  if (!c) return null;
+  const { item: c, state } = usePresence(useApp((s) => s.confirm));
+  if (!c || !state) return null;
   const close = () => useApp.setState({ confirm: null });
   return (
     <Dialog
       title="Are you sure?"
       size="small"
+      state={state}
       onClose={close}
       actions={
         <>
@@ -125,14 +143,14 @@ function Switch({ on, onChange, label }: { on: boolean; onChange: (v: boolean) =
   return <button className={`switch${on ? ' on' : ''}`} role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)} />;
 }
 
-function SettingsDialog({ onClose }: { onClose: () => void }) {
+function SettingsDialog({ onClose, state }: { onClose: () => void; state: PresenceState }) {
   const s = useApp((x) => x.settings);
   const set = (p: Partial<Settings>) => {
     updateSettings(p);
     controller.invalidate();
   };
   return (
-    <Dialog title="Settings" onClose={onClose}>
+    <Dialog state={state} title="Settings" onClose={onClose}>
       <div className="field">
         <span>Theme</span>
         <span className="seg">
@@ -178,7 +196,7 @@ function SettingsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function ShortcutsDialog({ onClose }: { onClose: () => void }) {
+function ShortcutsDialog({ onClose, state }: { onClose: () => void; state: PresenceState }) {
   const rows: Array<[string, string]> = [
     ['Move', 'V'],
     ['Point', 'P'],
@@ -205,7 +223,7 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
     ['Steps panel', 'J'],
   ];
   return (
-    <Dialog title="Keyboard & gestures" onClose={onClose}>
+    <Dialog state={state} title="Keyboard & gestures" onClose={onClose}>
       <div className="shortcuts">
         {rows.map(([a, b]) => (
           <div key={a} style={{ display: 'contents' }}>
@@ -228,7 +246,7 @@ function timeAgo(t: number) {
   return new Date(t).toLocaleDateString();
 }
 
-function LibraryDialog({ onClose }: { onClose: () => void }) {
+function LibraryDialog({ onClose, state }: { onClose: () => void; state: PresenceState }) {
   const [items, setItems] = useState<DocSummary[] | null>(null);
   const [cloud, setCloud] = useState<DocSummary[] | null>(null);
   const [user, setUser] = useState<CloudUser | null>(null);
@@ -243,7 +261,7 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
       });
   }, []);
   return (
-    <Dialog title="My constructions" size="wide" onClose={onClose}>
+    <Dialog state={state} title="My constructions" size="wide" onClose={onClose}>
       <p className="muted" style={{ marginTop: 0 }}>
         Saved automatically in this browser{cloudEnabled ? (user ? ' and synced to your account' : '. Sign in (menu → Account) to sync across devices') : ''}.
       </p>
@@ -321,7 +339,7 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function AccountDialog({ onClose }: { onClose: () => void }) {
+function AccountDialog({ onClose, state }: { onClose: () => void; state: PresenceState }) {
   const [user, setUser] = useState<CloudUser | null>(null);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
@@ -332,7 +350,7 @@ function AccountDialog({ onClose }: { onClose: () => void }) {
     return () => off();
   }, []);
   return (
-    <Dialog title="Account & sync" size="small" onClose={onClose}>
+    <Dialog state={state} title="Account & sync" size="small" onClose={onClose}>
       {user ? (
         <>
           <p>

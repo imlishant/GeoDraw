@@ -71,7 +71,9 @@ test('long-press pins a More tool without also selecting it; a short tap selects
   await setup(page);
   const cdp = await page.context().newCDPSession(page);
   await page.locator('[data-tool="more"]').tap();
-  const item = page.getByRole('dialog', { name: 'More tools' }).locator('[data-tool="segment"]');
+  const sheetEl = page.getByRole('dialog', { name: 'More tools' });
+  await sheetEl.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished))); // let it slide up first
+  const item = sheetEl.locator('[data-tool="segment"]');
   const b = (await item.boundingBox())!;
   const at = [{ x: b.x + b.width / 2, y: b.y + b.height / 2, id: 0 }];
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: at } as any);
@@ -102,4 +104,28 @@ test('small phone (iPhone 7 with Safari bars, 375×553): book and restore sit ab
     expect(box.y + box.height, `${id} overlaps the tools`).toBeLessThanOrEqual(tools.y);
     expect(box.y).toBeGreaterThan(0);
   }
+});
+
+test('phone sheets: Steps covers the tools and closes with a swipe down', async ({ page }) => {
+  test.skip(page.viewportSize()!.width >= 600, 'bottom sheets are the phone layout');
+  await setup(page);
+  const cdp = await page.context().newCDPSession(page);
+  await page.getByTestId('steps-button').tap();
+  const sheet = page.getByRole('complementary', { name: 'Construction panel' });
+  await sheet.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  // the sheet is above the tools row, so nothing is hidden behind it
+  const covered = await page.evaluate(() => {
+    const t = document.querySelector('.toolbar')!.getBoundingClientRect();
+    const hit = document.elementFromPoint(t.left + 30, t.top + t.height / 2);
+    return !!hit?.closest('.drawer');
+  });
+  expect(covered).toBe(true);
+  // swipe down on the grab handle
+  const h = (await sheet.locator('.sheet-handle').boundingBox())!;
+  const x = h.x + h.width / 2;
+  const y = h.y + h.height / 2;
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y, id: 0 }] } as any);
+  for (let i = 1; i <= 8; i++) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y + i * 25, id: 0 }] } as any);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] } as any);
+  await expect(sheet).toHaveCount(0);
 });

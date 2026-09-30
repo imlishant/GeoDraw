@@ -231,6 +231,11 @@ test('only one side panel at a time; picking a tool closes them', async ({ page,
   await page.getByTestId('steps-button').click(); // and back
   await expect(steps).toBeVisible();
   await expect(menu).toHaveCount(0);
+  // on phones the Steps sheet covers the tools row (⋯ included): close it first, as a person would
+  if (isMobile) {
+    await steps.getByRole('button', { name: 'Close panel' }).click();
+    await expect(steps).toHaveCount(0);
+  }
   await page.locator('[data-tool="more"]').click(); // More replaces it too
   await expect(more).toBeVisible();
   await expect(steps).toHaveCount(0);
@@ -238,9 +243,12 @@ test('only one side panel at a time; picking a tool closes them', async ({ page,
   if (isMobile) await more.getByRole('button', { name: 'Close' }).click();
   await page.getByTestId('steps-button').click();
   await expect(more).toHaveCount(0);
-  await page.locator('.toolbar [data-tool="circle"]').click(); // choosing a tool clears panels away
-  await expect(steps).toHaveCount(0);
-  await expect(menu).toHaveCount(0);
+  if (!isMobile) {
+    // (on phones the Steps sheet covers the tools; it closes by swipe — see touch.spec)
+    await page.locator('.toolbar [data-tool="circle"]').click(); // choosing a tool clears panels away
+    await expect(steps).toHaveCount(0);
+    await expect(menu).toHaveCount(0);
+  }
 });
 
 test('Save as image: white background even in dark mode, and it reopens as the construction', async ({ page, isMobile }) => {

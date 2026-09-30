@@ -15,6 +15,10 @@
   --shadow: 0 2px 10px rgba(20, 24, 32, 0.1), 0 1px 2px rgba(20, 24, 32, 0.06);
   --icon-bg: var(--panel);
   --radius: 12px;
+  --ease-out: cubic-bezier(0.32, 0.72, 0, 1); /* iOS sheet curve */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur: 260ms;
+  --dur-out: 190ms;
   --btn: 46px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
@@ -63,6 +67,10 @@ textarea {
 button {
   cursor: pointer;
   touch-action: manipulation;
+  transition: transform 140ms var(--ease-out), background-color 180ms ease, color 180ms ease, border-color 180ms ease, opacity 180ms ease;
+}
+button:active:not(:disabled) {
+  transform: scale(0.94);
 }
 button:disabled {
   cursor: default;
@@ -874,6 +882,49 @@ kbd {
   font-size: 16px;
 }
 
+
+/* ---- motion (iOS-like): enter with a soft ease-out, leave a little faster ---- */
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-6px) scale(0.97); } }
+@keyframes pop-out { to { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+@keyframes side-in { from { opacity: 0; transform: translateX(-18px); } }
+@keyframes side-out { to { opacity: 0; transform: translateX(-18px); } }
+@keyframes rise-in { from { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.98); } }
+@keyframes rise-out { to { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.98); } }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+@keyframes sheet-out { to { transform: translateY(100%); } }
+@keyframes dialog-in { from { opacity: 0; transform: scale(0.95); } }
+@keyframes dialog-out { to { opacity: 0; transform: scale(0.97); } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(6px); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.6); } }
+@keyframes scale-out { to { opacity: 0; transform: scale(0.6); } }
+
+[data-state='closing'] {
+  pointer-events: none !important;
+}
+.menu[data-state='open'] { animation: pop-in var(--dur) var(--ease-out); transform-origin: top left; }
+.menu[data-state='closing'] { animation: pop-out var(--dur-out) var(--ease-in) forwards; }
+.drawer[data-state='open'] { animation: side-in var(--dur) var(--ease-out); }
+.drawer[data-state='closing'] { animation: side-out var(--dur-out) var(--ease-in) forwards; }
+.more[data-state='open'] { animation: rise-in var(--dur) var(--ease-out); }
+.more[data-state='closing'] { animation: rise-out var(--dur-out) var(--ease-in) forwards; }
+.scrim[data-state='open'] { animation: fade-in var(--dur) ease; }
+.scrim[data-state='closing'] { animation: fade-out var(--dur-out) ease forwards; }
+.scrim[data-state='open'] .dialog { animation: dialog-in var(--dur) var(--ease-out); }
+.scrim[data-state='closing'] .dialog { animation: dialog-out var(--dur-out) var(--ease-in) forwards; }
+.toast[data-state='open'] { animation: toast-in var(--dur) var(--ease-out); }
+.toast[data-state='closing'] { animation: toast-out 200ms var(--ease-in) forwards; }
+.popover { animation: pop-in 200ms var(--ease-out); }
+.restore-btn[data-state='open'] { animation: scale-in var(--dur) var(--ease-out); }
+.restore-btn[data-state='closing'] { animation: scale-out var(--dur-out) var(--ease-in) forwards; }
+
+/* grab handle: only on phone sheets */
+.sheet-handle {
+  display: none;
+}
+
 /* ---- phone ---- */
 @media (max-width: 599px) {
   .title-input {
@@ -899,12 +950,50 @@ kbd {
     top: auto;
     transform: none;
     bottom: 0;
-    border-radius: 16px 16px 0 0;
+    border-radius: 18px 18px 0 0;
     max-height: 62vh;
     padding-bottom: var(--safe-b);
   }
   .drawer {
-    height: 58vh;
+    height: 60vh;
+    z-index: 30; /* a sheet covers the tools row while open (picking a tool closes it anyway) */
+  }
+  .drawer-body {
+    min-height: 0;
+    overscroll-behavior: contain;
+    padding-bottom: calc(16px + var(--safe-b));
+  }
+  .sheet-handle {
+    display: block;
+    height: 22px;
+    flex: 0 0 auto;
+    cursor: grab;
+    position: relative;
+  }
+  .sheet-handle::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 8px;
+    width: 38px;
+    height: 5px;
+    margin-left: -19px;
+    border-radius: 999px;
+    background: var(--panel-border);
+  }
+  .drawer[data-state='open'],
+  .more[data-state='open'] {
+    animation: sheet-in var(--dur) var(--ease-out);
+  }
+  .drawer[data-state='closing'],
+  .more[data-state='closing'] {
+    animation: sheet-out var(--dur-out) var(--ease-in) forwards;
+  }
+  .scrim[data-state='open'] .dialog {
+    animation: sheet-in var(--dur) var(--ease-out);
+  }
+  .scrim[data-state='closing'] .dialog {
+    animation: sheet-out var(--dur-out) var(--ease-in) forwards;
   }
   .more-group {
     grid-template-columns: 1fr;
@@ -935,6 +1024,7 @@ kbd {
 }
 @media (prefers-reduced-motion: reduce) {
   * {
+    animation: none !important;
     transition: none !important;
   }
 }

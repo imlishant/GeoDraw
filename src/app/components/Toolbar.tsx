@@ -3,6 +3,7 @@ import { isToolAllowed, setTool, toast, togglePanel, togglePin, useApp } from '.
 import { MAIN_BAR, MAX_PINS, MORE_GROUPS, TOOL_BY_KEY, TOOLS, type ToolKey, type ToolUI } from '../tools';
 import { Icon, ToolIcon } from './Icons';
 import { StepsButton } from './StepsDrawer';
+import { usePresence, useSheetDrag, type PresenceState } from './motion';
 import { RestoreButton } from './Chrome';
 
 function tooltip(t: ToolUI) {
@@ -14,6 +15,7 @@ export function Toolbar() {
   const pins = useApp((s) => s.settings.pins);
   const lastMore = useApp((s) => s.lastMore);
   const moreOpen = useApp((s) => s.moreOpen);
+  const more = usePresence(moreOpen);
   const picks = useApp((s) => s.session.picks);
   const readOnly = useApp((s) => s.readOnly);
   useApp((s) => s.settings.strict); // re-render when the allowed tools change
@@ -78,12 +80,13 @@ export function Toolbar() {
           }}
         />
       )}
-      {moreOpen && <MoreDrawer />}
+      {more.state && <MoreDrawer state={more.state} />}
     </div>
   );
 }
 
-function MoreDrawer() {
+function MoreDrawer({ state }: { state: PresenceState }) {
+  const sheet = useSheetDrag(() => useApp.setState({ moreOpen: false }));
   const [q, setQ] = useState('');
   const tool = useApp((s) => s.tool);
   const pins = useApp((s) => s.settings.pins);
@@ -171,7 +174,15 @@ function MoreDrawer() {
   };
 
   return (
-    <div className="panel more" role="dialog" aria-label="More tools">
+    <div
+      ref={sheet.ref}
+      className="panel more"
+      role="dialog"
+      aria-label="More tools"
+      data-state={state}
+      aria-hidden={state === 'closing' || undefined}
+    >
+      <div className="sheet-handle" aria-hidden="true" {...sheet.handle} />
       <div className="more-search">
         <Icon name="search" size={18} />
         <input
